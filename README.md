@@ -2,7 +2,7 @@
 
 LEGO® EV3 · SPIKE 부품으로 로봇을 조립하고, 스텝별 **조립카드**를 만드는 웹 CAD입니다. 설치 없이 브라우저에서 실행됩니다.
 
-**바로 사용하기:** 이 저장소의 GitHub Pages 주소 (`https://<계정>.github.io/mindstorms-cad/`)
+**바로 사용하기:** https://daewonlee81-glitch.github.io/mindstorms-cad/
 
 ## 주요 기능
 - EV3 Core/Expansion/Home, SPIKE Prime/Expansion/Essential, Robot Inventor 세트 부품 (LDraw 라이브러리 기반)
