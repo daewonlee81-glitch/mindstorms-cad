@@ -70,7 +70,25 @@ main{display:grid;grid-template-columns:260px 1fr 360px;min-height:0}
 .part:hover{border-color:var(--accent)}
 .part canvas,.part .ph{width:100%;aspect-ratio:1;display:block;background:var(--panel);border-radius:4px}
 .part .pn{font-family:var(--mono);font-size:10px;margin-top:3px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.part .qty{font-size:10px;color:var(--muted)}
+.part .qty{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+.part .qty.used{color:var(--accent);font-weight:600}
+.part .qty.full{color:var(--warn);font-weight:600}
+.part .qty.over{color:#fff;background:#c0392b;border-radius:3px;padding:0 4px;font-weight:600}
+.part.is-over{border-color:#c0392b}
+.usage-sum{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.usage-sum b.over{color:#c0392b}
+.usage-cards{display:flex;gap:8px;flex-wrap:wrap}
+.usage-cards div{border:1px solid var(--line);border-radius:6px;padding:6px 10px;min-width:96px}
+.usage-cards b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
+.usage-cards .bad b{color:#c0392b}
+table.usage{border-collapse:collapse;width:100%;font-size:12px}
+table.usage th{position:sticky;top:0;background:var(--panel2);text-align:left;font-weight:500;color:var(--muted);padding:5px 8px;border-bottom:1px solid var(--line)}
+table.usage td{padding:4px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.usage .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.usage img{width:32px;height:32px;object-fit:contain;display:block}
+table.usage tr.over td{background:color-mix(in srgb,#c0392b 12%,transparent)}
+table.usage tr.over .left{color:#c0392b;font-weight:600}
+table.usage td.nm{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 #viewportWrap{position:relative;background:var(--viewport);min-height:0}
 #viewport{position:absolute;left:0;top:0;display:block;touch-action:none}
@@ -178,8 +196,10 @@ textarea{width:100%;min-height:90px;font-family:var(--mono);font-size:11px;white
     <h2>부품</h2>
     <div class="pane-body">
       <div class="row">
-        <select id="setSel" aria-label="세트 선택" style="flex:1"></select>
+        <select id="setSel" aria-label="세트 선택" style="flex:1;min-width:0"></select>
+        <button class="small" id="btnUsage" title="모델에 쓴 부품을 세트 수량과 비교합니다">사용량</button>
       </div>
+      <div class="usage-sum" id="usageSum"></div>
       <input id="search" type="text" placeholder="검색: beam, 95658, motor…" aria-label="부품 검색">
       <div class="chips" id="catChips"></div>
       <div id="partList"></div>
@@ -295,6 +315,16 @@ textarea{width:100%;min-height:90px;font-family:var(--mono);font-size:11px;white
       <div class="row"><button class="small" id="aboutEnvCopy">환경 정보 복사</button></div></div>
     <small>부품 데이터: LDraw.org Parts Library (CC BY 4.0) · Geekservo·CADA·Circuit Cubes 부품: Philippe Hurbain (philohome) · 3D: three.js (MIT) · ESP32·Arduino 보드: RoboMakers 단순화 모델</small>
     <div class="row"><span class="spacer"></span><button id="aboutClose">닫기</button></div>
+  </div>
+</div>
+<div id="usageDlg" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:grid;place-items:center;z-index:21;padding:16px">
+  <div role="dialog" aria-labelledby="usageTitle" style="background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;width:min(720px,100%);max-height:min(86vh,760px);display:flex;flex-direction:column;gap:8px">
+    <div class="row"><strong id="usageTitle">부품 사용량</strong><span class="label" id="usageSet"></span><span class="spacer"></span><button class="small" id="usageClose" aria-label="닫기">✕</button></div>
+    <div class="usage-cards" id="usageCards"></div>
+    <div style="overflow:auto;min-height:0;border:1px solid var(--line);border-radius:6px">
+      <table class="usage" id="usageTable"><thead><tr><th></th><th>부품</th><th>이름</th><th class="n">사용</th><th class="n">세트</th><th class="n">남음</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="row"><button class="small" id="usageCsv">CSV 복사</button><span class="label" id="usageMsg"></span><span class="spacer"></span><label><input type="checkbox" id="usageOnlyOver"> 부족한 부품만</label></div>
   </div>
 </div>
 <div id="dropHint" hidden>.ldr / .mpd / .zip</div>
