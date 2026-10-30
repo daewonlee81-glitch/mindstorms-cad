@@ -160,6 +160,42 @@ textarea{width:100%;min-height:90px;font-family:var(--mono);font-size:11px;white
 .card .note{padding:6px 12px 10px;font-size:12px;color:#334;min-height:1.2em}
 .card .ports{padding:0 12px 8px;font-family:var(--mono);font-size:11px;color:#0b7fab}
 
+/* Mode toggle + simulator */
+.modeseg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px;background:var(--panel2)}
+.modeseg button{border:0;border-radius:999px;background:transparent;padding:3px 12px;font-weight:500}
+.modeseg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+#simLeft,#simRight,#simCanvas,#simHud{display:none}
+body.sim #palette,body.sim #right,body.sim #viewport,body.sim #hud,body.sim #hint,body.sim #emptyHint,body.sim #snapTip,body.sim #ctx,body.sim #btnCards,body.sim #cards{display:none!important}
+body.sim main{grid-template-columns:minmax(360px,44%) 1fr 290px}
+body.sim #simLeft,body.sim #simRight{display:flex}
+body.sim #simLeft{border-right:1px solid var(--line)}
+body.sim header h1 small{display:none}
+body.sim #simRight{border-left:1px solid var(--line)}
+body.sim #simCanvas{display:block;position:absolute;left:0;top:0;touch-action:none}
+body.sim #simHud{display:flex;position:absolute;left:10px;top:10px;flex-direction:column;gap:6px;z-index:2}
+#blocklyDiv{flex:1;min-height:0;position:relative}
+.stopbtn{background:#c0392b;color:#fff;border-color:#c0392b}
+.hubw{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;background:#f4f4f4;border:3px solid #fac80a}
+.hubw{flex-wrap:wrap;position:relative}
+.mtx{display:grid;grid-template-columns:repeat(5,14px);gap:5px;padding:9px;background:#1b1f24;border-radius:6px}
+.mtx i{display:block;width:14px;height:14px;border-radius:2px;background:#fff3cf;opacity:.12;box-shadow:0 0 6px rgba(255,236,170,.55)}
+.hubname{font-size:11px;color:#5f6c7b;margin-left:auto;align-self:flex-end}
+.hub-ev3{background:#3b3f45;border-color:#8a8f96}.hub-ev3 .hubname{color:#d0d4d8}
+#simLcd{width:178px;height:128px;border:6px solid #202327;border-radius:4px;image-rendering:pixelated}
+.ev3btns{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:8px;background:#55595f}
+.hubdot.big{width:36px;height:36px}
+.hubdot{width:22px;height:22px;border-radius:50%;background:#888;border:2px solid #ddd;flex:none}
+#simPorts{display:flex;flex-direction:column;gap:2px}
+.prow{display:grid;grid-template-columns:22px 1fr auto;gap:6px;align-items:center;padding:3px 6px;border-radius:4px;background:var(--panel2);font-size:12px}
+.prow b{font-family:var(--mono)}
+.prow .v{font-family:var(--mono);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:4px}
+.sw-dot{display:inline-block;width:10px;height:10px;border-radius:50%;border:1px solid var(--line)}
+.simgrid{display:grid;grid-template-columns:1fr 90px;gap:4px 8px;align-items:center;font-size:12px}
+.simgrid input,.simgrid select{width:100%}
+.note{font-size:11px;color:var(--muted)}
+.hudbox[hidden]{display:none!important}
+#simScore{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px}
+#simLog{font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:2px;max-height:160px;overflow:auto}
 /* Phone layout */
 #tabs{display:none}
 @media (max-width:900px){
@@ -168,6 +204,9 @@ textarea{width:100%;min-height:90px;font-family:var(--mono);font-size:11px;white
   #palette.open,#right.open{display:flex}
   #tabs{display:flex;gap:6px;padding:6px 12px;background:var(--panel);border-top:1px solid var(--line)}
   #tabs button{flex:1}
+  body.sim main{grid-template-columns:1fr;grid-template-rows:50% 1fr}
+  body.sim #simRight{display:none}
+  .modeseg button{padding:3px 8px}
   header h1 small{display:none}
 }
 @media (prefers-reduced-motion:no-preference){.step,.part{transition:border-color .12s}}
@@ -177,6 +216,7 @@ textarea{width:100%;min-height:90px;font-family:var(--mono);font-size:11px;white
 <header>
   <img class="logo" alt="RoboMakers" src="data:image/png;base64,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">
   <h1>MindStorms CAD<small>EV3 · SPIKE 조립카드 편집기</small></h1>
+  <div class="modeseg" role="group" aria-label="mode"><button id="modeCad" aria-pressed="true">CAD</button><button id="modeSim" aria-pressed="false">로봇 시뮬레이터</button></div>
   <input id="modelName" type="text" value="새 모델" aria-label="모델 이름">
   <button id="btnUndo" title="되돌리기 (Ctrl+Z)">↶</button>
   <button id="btnRedo" title="다시 실행 (Ctrl+Y)">↷</button>
@@ -206,8 +246,24 @@ textarea{width:100%;min-height:90px;font-family:var(--mono);font-size:11px;white
     </div>
   </section>
 
+  <section id="simLeft" class="panel"><div id="blocklyDiv"></div></section>
   <section id="viewportWrap">
     <canvas id="viewport"></canvas>
+    <canvas id="simCanvas"></canvas>
+    <div id="simHud">
+      <div class="hudbox">
+        <button id="simRun" class="primary">▶ <span>실행</span></button><button id="simStop" class="stopbtn" hidden>■ <span>정지</span></button>
+        <button id="simReset" class="small">처음 위치로</button>
+        <span class="label">속도</span><select id="simSpeed" aria-label="속도"><option value="0.5">×0.5</option><option value="1" selected>×1</option><option value="2">×2</option><option value="4">×4</option></select>
+        <button class="small" id="simPhys" aria-pressed="false">물리엔진</button>
+      </div>
+      <div class="hudbox">
+        <span class="label">시점</span><button class="small" data-simcam="orbit">비스듬히</button><button class="small" data-simcam="top">위에서</button><button class="small" data-simcam="follow">따라가기</button>
+        <span class="label">매트</span><select id="simMat" aria-label="매트"><optgroup label="기본 매트" data-ko="기본 매트"><option value="line" data-ko="라인 트레이싱">라인 트레이싱</option><option value="grid" data-ko="격자">격자</option><option value="colors" data-ko="색깔 구역">색깔 구역</option><option value="obstacles" data-ko="장애물">장애물</option></optgroup><optgroup label="경기장" data-ko="경기장"><option value="sumo" data-ko="스모 경기장 (RoboRAVE Ø80cm)">스모 경기장 (RoboRAVE Ø80cm)</option><option value="othello" data-ko="WRL 로봇 배틀 오델로">WRL 로봇 배틀 오델로</option><option value="soccer" data-ko="축구 경기장 (MRC 120×180)">축구 경기장 (MRC 120×180)</option><option value="rr_es" data-ko="RoboRAVE 라인 팔로우 ES">RoboRAVE 라인 팔로우 ES</option><option value="rr_ms" data-ko="RoboRAVE 라인 팔로우 MS">RoboRAVE 라인 팔로우 MS</option><option value="rr_hs" data-ko="RoboRAVE 라인 팔로우 HS·UP">RoboRAVE 라인 팔로우 HS·UP</option><option value="jbc" data-ko="Botball 주니어 (Mat A)">Botball 주니어 (Mat A)</option><option value="ess_num" data-ko="SPIKE 에센셜 숫자 경기장">SPIKE 에센셜 숫자 경기장</option></optgroup><option value="image" data-ko="이미지 올리기…">이미지 올리기…</option></select>
+        <input type="file" id="simMatFile" accept="image/*" hidden>
+      </div>
+      <div class="hudbox" id="simScoreBox" hidden><span id="simScore" class="num"></span></div>
+    </div>
     <div id="loading">LDraw 부품 라이브러리 불러오는 중…</div>
     <div id="emptyHint" hidden><div><b>빈 모델</b>왼쪽 목록에서 부품을 클릭하면 여기에 놓입니다. 저장한 파일은 "열기"로 불러오세요.</div></div>
     <div id="hud">
@@ -292,6 +348,31 @@ textarea{width:100%;min-height:90px;font-family:var(--mono);font-size:11px;white
       </details>
     </div>
   </section>
+  <section id="simRight" class="panel">
+    <h2>허브</h2>
+    <div class="pane-body">
+      <div id="simHubBox" class="hubw"></div>
+      <div class="label">포트</div>
+      <div id="simPorts"></div>
+      <button id="simForce">힘센서 누르기</button>
+      <div class="label" style="margin-top:6px">로봇 설정</div>
+      <div id="simRobotInfo" class="note"></div>
+      <div class="simgrid">
+        <label for="simHubKind">허브 종류</label><select id="simHubKind"><option value="auto">자동</option><option value="prime">SPIKE Prime</option><option value="essential">SPIKE Essential</option><option value="ev3">EV3</option></select>
+        <label for="simLeftPort">왼쪽 바퀴 모터</label><select id="simLeftPort"></select>
+        <label for="simRightPort">오른쪽 바퀴 모터</label><select id="simRightPort"></select>
+        <label for="simWheel">바퀴 지름 (mm)</label><input type="number" id="simWheel" min="10" step="1">
+        <label for="simTrack">바퀴 간격 (mm)</label><input type="number" id="simTrack" min="20" step="1">
+        <label for="simMass">로봇 무게 (g)</label><input type="number" id="simMass" min="50" step="10">
+      </div>
+      <div class="note">무게는 물리엔진 모드에서 쓰입니다</div>
+      <div class="row"><button class="small" id="simFlip">앞뒤 바꾸기</button><span class="label">시작 방향</span><button class="small" id="simRotL" aria-label="↺ 15°">↺</button><button class="small" id="simRotR" aria-label="↻ 15°">↻</button></div>
+      <div class="note">로봇을 끌어서 옮기고, 시작 방향 버튼으로 돌릴 수 있습니다</div>
+      <div class="note">센서는 로봇 앞쪽(거리)과 바닥(컬러)을 본다고 가정합니다</div>
+      <div class="label" style="margin-top:6px">메시지</div>
+      <div id="simLog" class="num"></div>
+    </div>
+  </section>
 </main>
 <nav id="tabs"><button id="tabParts">부품</button><button id="tabView">3D</button><button id="tabSteps">스텝</button></nav>
 </div>
@@ -328,6 +409,10 @@ textarea{width:100%;min-height:90px;font-family:var(--mono);font-size:11px;white
   </div>
 </div>
 <div id="dropHint" hidden>.ldr / .mpd / .zip</div>
+<script src="vendor/blockly_compressed.js"></script>
+<script src="vendor/blocks_compressed.js"></script>
+<script src="vendor/javascript_compressed.js"></script>
+<script src="blockly_msgs.js"></script>
 <script src="jszip.min.js"></script>
 <script src="data.js"></script>
 <script src="app.js"></script>
