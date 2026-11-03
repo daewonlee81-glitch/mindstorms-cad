@@ -1,4 +1,4 @@
-# MindStorms CAD
+# 로보메이커스 캐드 (RoboMakers CAD)
 
 LEGO® EV3 · SPIKE 부품으로 로봇을 조립하고, 스텝별 **조립카드**를 만드는 웹 CAD입니다. 설치 없이 브라우저에서 실행됩니다.
 
