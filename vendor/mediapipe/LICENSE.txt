@@ -1,0 +1,4 @@
+MediaPipe Tasks Vision 0.10.21 (https://github.com/google-ai-edge/mediapipe) and the MediaPipe models
+pose_landmarker_lite, gesture_recognizer, blaze_face_short_range, efficientdet_lite0 and mobilenet_v3_small
+are Copyright Google LLC and licensed under the Apache License, Version 2.0:
+https://www.apache.org/licenses/LICENSE-2.0
