@@ -22,6 +22,7 @@ LEGO® EV3 · SPIKE 부품으로 로봇을 조립하고, 스텝별 **조립카�
 - **제어 방식 4가지**: 온오프 · P · PD · PID 제어를 초등학생 눈높이 설명과 함께 골라 학습, "4가지 모두 비교"로 점수·완주 시간 비교표 (PD·PID는 변수 블록 오차·이전 오차·누적 오차 사용)
 - **실제 허브에서 실행 (Pybricks)**: 시뮬레이터의 워드블록을 Pybricks 파이썬으로 바꿔 웹 블루투스로 SPIKE Prime·Essential·Robot Inventor 허브에 내려보내 바로 실행, 허브의 출력 메시지 표시, 파이썬 코드 보기·복사·.py 저장 (허브에 Pybricks 펌웨어 필요, PC·안드로이드의 Chrome·Edge)
 - **AI 카메라**: PC 카메라로 몸 스켈레톤(관절 위치·팔 각도·몸 기울기), 손 제스처·펼친 손가락 수, 얼굴, 물체(사람·공·컵 등 18종), 색 덩어리(빨강·초록·파랑·노랑)를 인식하고, 카메라로 직접 학습시키는 분류(클래스 4개)까지 "AI 카메라" 블록으로 써서 로봇을 움직이기. 시뮬레이터와 실제 Pybricks 허브(블루투스로 값 전송) 모두 동작, 브라우저 안에서만 처리(영상은 밖으로 나가지 않음)
+- **워드블럭 블록**: 시뮬레이터 블록은 [로보메이커스 워드블럭](https://daewonlee81-glitch.github.io/Robomakers_APP/)과 같은 구성(시작·모터·주행·센서·허브·제어·연산·변수·내 블록·AI 카메라·게임패드·허스키렌즈·ESP32)과 같은 파이썬 코드·허브 라이브러리를 씁니다. 블루투스·USB 연결, ▶ 실행과 📥 허브에 다운로드(저장만 하고 허브 버튼으로 실행)
 - 채점은 2025 JBC 중국 결선 루키 과제 규칙 기준 (캔이 원을 벗어나거나 넘어지면 실패, 로봇 전체 출발선 복귀, 차고 1초 정지, R7 큰 번호부터, 끝날 때 캔 접촉 금지, 매트 이탈 실패)
 - 한국어 / English / 日本語 / 中文 / Español
 
@@ -37,7 +38,7 @@ RoboMakers · Daewon Lee · robot-league@naver.com
 - 부품 형상: [LDraw.org Parts Library](https://www.ldraw.org) — CC BY 4.0 (각 부품 작성자 표기 포함)
 - Geekservo · CADA · Circuit Cubes 부품: Philippe Hurbain ([philohome.com](https://philohome.com)) — CC BY 4.0 / CCAL 2.0
 - ESP32 · Arduino 보드: RoboMakers 단순화 모델 — CC BY 4.0
-- 3D 엔진: [three.js](https://threejs.org) — MIT · ZIP: [JSZip](https://stuk.github.io/jszip/) — MIT · 블록 편집기: [Blockly](https://github.com/google/blockly) — Apache 2.0 · 물리엔진: [Rapier](https://rapier.rs) — Apache 2.0 · 파이썬 컴파일러: [Pybricks mpy-cross](https://github.com/pybricks/pybricks-micropython) — MIT · AI 카메라: [MediaPipe Tasks Vision](https://github.com/google-ai-edge/mediapipe)과 모델(포즈·제스처·얼굴·물체·이미지 임베딩) — Apache 2.0
+- 3D 엔진: [three.js](https://threejs.org) — MIT · ZIP: [JSZip](https://stuk.github.io/jszip/) — MIT · 블록 편집기: [Blockly](https://github.com/google/blockly) — Apache 2.0 · 물리엔진: [Rapier](https://rapier.rs) — Apache 2.0 · 파이썬 컴파일러: [Pybricks mpy-cross](https://github.com/pybricks/pybricks-micropython) — MIT · 허브 라이브러리: 로보메이커스 워드블럭 hublib (pupremote_hub·bluepad: [Anton's Mindstorms](https://github.com/antonvh) — GPL-3.0) · AI 카메라: [MediaPipe Tasks Vision](https://github.com/google-ai-edge/mediapipe)과 모델(포즈·제스처·얼굴·물체·이미지 임베딩) — Apache 2.0
 - 세트 구성 정보: [Rebrickable](https://rebrickable.com)
 
 LEGO®, MINDSTORMS®, SPIKE™는 LEGO Group의 상표이며, 이 프로젝트는 LEGO Group의 후원이나 승인을 받지 않았습니다.
