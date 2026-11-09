@@ -42,3 +42,12 @@ RoboMakers · Daewon Lee · robot-league@naver.com
 - 세트 구성 정보: [Rebrickable](https://rebrickable.com)
 
 LEGO®, MINDSTORMS®, SPIKE™는 LEGO Group의 상표이며, 이 프로젝트는 LEGO Group의 후원이나 승인을 받지 않았습니다.
+
+## 워드블럭 에디터 연동 (wordblock-sync.js)
+
+[로보메이커스 워드블럭 에디터](https://daewonlee81-glitch.github.io/Robomakers_APP/)의 새 블록(사물 인식·사물 학습·색 인식·색 학습, ESP32 핀·서보·네오픽셀)과 최신 허브 라이브러리를 `wordblock-sync.js` 가 시뮬레이터에 붙입니다.
+
+- 에디터의 **🧪 시뮬레이터** 버튼 → 블록을 들고 이 시뮬레이터로 옵니다 (`?from=wordblock`).
+- 시뮬레이터의 **✏️ 워드블럭 에디터로** 버튼 → 블록을 에디터로 돌려보냅니다.
+- `wordblock-sync.js` 는 에디터 저장소의 `tools/sync_cad.py` 가 만듭니다. 직접 고치지 마세요.
+- `app.js` 에는 훅 네 곳만 들어 있습니다 (`window.__wb` 확장, `window.__wbKeys`, `window.__wbFrames`, `window.__wbTb`). app.js 를 다시 빌드하면 이 훅을 다시 넣어야 합니다.
