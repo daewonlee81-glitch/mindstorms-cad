@@ -271,7 +271,7 @@ body.sim #simHud{display:flex;position:absolute;left:10px;top:10px;flex-directio
       <div class="hudbox">
         <span class="label">이동</span>
         <button class="small" data-mv="x-">X−</button><button class="small" data-mv="x+">X+</button>
-        <button class="small" data-mv="y-">위</button><button class="small" data-mv="y+">아래</button>
+        <button class="small" data-mv="y-" title="위로 (Shift+↑ / PageUp)">위</button><button class="small" data-mv="y+" title="아래로 (Shift+↓ / PageDown)">아래</button>
         <button class="small" data-mv="z-">Z−</button><button class="small" data-mv="z+">Z+</button>
         <span class="label">격자</span>
         <select id="gridSel" aria-label="격자 간격"><option value="20">20 LDU (1 스터드)</option><option value="10">10 LDU</option><option value="8">8 LDU (플레이트 높이)</option><option value="4">4 LDU</option></select>
@@ -286,7 +286,7 @@ body.sim #simHud{display:flex;position:absolute;left:10px;top:10px;flex-directio
         <button class="small" id="btnSnap" title="선택한 부품을 가장 가까운 연결부에 회전까지 맞춰 붙입니다 (S)">연결부에 붙이기</button>
       </div>
     </div>
-    <div id="hint">부품 끌어다 놓기: 배치 · 클릭: 선택 · 우클릭: 좌표·스텝 편집 · 드래그: 수평 이동 · Shift+드래그: 수직 이동 · Alt: 자석 해제 · S: 연결부에 붙이기 · R/T/F: 회전 · Del: 삭제 · Ctrl+D: 복제</div>
+    <div id="hint">부품 끌어다 놓기: 배치 · 클릭: 선택 · 우클릭: 좌표·스텝 편집 · 드래그: 수평 이동 · Shift+드래그: 수직 이동 · Alt: 자석 해제 · S: 연결부에 붙이기 · R/T/F: 회전 · Del: 삭제 · Ctrl+D: 제자리 복제 · ←→↑↓: 이동 · Shift+↑↓ (PageUp/PageDown): 위·아래</div>
     <div id="snapTip" hidden></div>
     <div id="ctx" hidden role="dialog" aria-label="부품 위치 편집">
       <div class="ctx-h"><strong id="ctxName"></strong><span class="num" id="ctxId"></span><button class="small" id="ctxClose" aria-label="닫기">✕</button></div>
