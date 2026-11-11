@@ -8,6 +8,10 @@
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const TR = {
+  "🔒 비밀번호를 입력하세요": ["🔒 Enter the password", "🔒 パスワードを入力してください", "🔒 请输入密码", "🔒 Introduce la contraseña"],
+  "확인": ["OK", "OK", "确定", "Aceptar"],
+  "비밀번호가 맞지 않습니다": ["Wrong password", "パスワードが違います", "密码不正确", "Contraseña incorrecta"],
+  "비밀번호": ["Password", "パスワード", "密码", "Contraseña"],
   "파일을 열 수 없습니다: {0}": ["Could not open the file: {0}", "ファイルを開けません: {0}", "无法打开文件: {0}", "No se pudo abrir el archivo: {0}"],
   "📥 수업 도면": ["📥 Class files", "📥 授業の図面", "📥 课程图纸", "📥 Archivos de clase"],
   "수업 도면": ["Class files", "授業の図面", "课程图纸", "Archivos de clase"],
@@ -56,12 +60,29 @@
   const exp = $('#btnExport');
   const btn = document.createElement('button'); btn.id = 'btnClass'; btn.dataset.k = '📥 수업 도면'; btn.dataset.kTitle = '선생님이 올린 도면 받기';
   exp.after(btn);
-  const wrap = document.createElement('div'); wrap.innerHTML = '<div id="clsDlg" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:grid;place-items:center;z-index:20;padding:16px">\n  <div role="dialog" aria-label="수업 도면" style="background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;width:min(560px,100%);max-height:90vh;display:flex;flex-direction:column;gap:8px">\n    <div class="row" style="display:flex;gap:6px;align-items:center"><strong style="flex:1">📥 수업 도면</strong><button class="small" id="clsRefresh">새로고침</button><button class="small" id="clsClose">닫기</button></div>\n    <input id="clsQ" type="search" placeholder="검색" aria-label="검색">\n    <div id="clsList" style="overflow:auto;min-height:120px;max-height:46vh;border:1px solid var(--line);border-radius:6px"></div>\n    <div id="clsMsg" style="min-height:1.2em;font-size:12px;color:var(--muted)"></div>\n    <details id="clsTeach"><summary style="cursor:pointer;font-weight:600">선생님: 도면 올리기</summary>\n      <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;font-size:13px">\n        <div class="row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="flex:1">① 지금 모델을 .ldr로 저장 (블록 프로그램·시뮬레이터 설정 포함)</span><button class="small" id="clsSave">모델 저장</button></div>\n        <label style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span>② 반 이름 (폴더)</span><input id="clsGroup" type="text" placeholder="예: 월수 3시반" style="flex:1;min-width:140px"></label>\n        <div style="font-size:12px;color:var(--muted)"><span>올릴 위치</span>: <span class="num" id="clsPath"></span></div>\n        <div class="row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="flex:1">③ GitHub에 로그인해 파일을 끌어 놓고 Commit changes</span><button class="small primary" id="clsUpload">GitHub 업로드 열기</button></div>\n        <div style="font-size:12px;color:var(--muted)">올린 뒤 1~2분 안에 목록에 나타납니다. 올리려면 저장소 공동작업자(Collaborator) 권한이 필요합니다.</div>\n      </div>\n    </details>\n  </div>\n</div>'; document.body.appendChild(wrap.firstElementChild);
+  const wrap = document.createElement('div'); wrap.innerHTML = '<div id="clsDlg" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:grid;place-items:center;z-index:20;padding:16px">\n  <div role="dialog" aria-label="수업 도면" style="background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;width:min(560px,100%);max-height:90vh;display:flex;flex-direction:column;gap:8px">\n    <div class="row" style="display:flex;gap:6px;align-items:center"><strong style="flex:1">📥 수업 도면</strong><button class="small" id="clsRefresh">새로고침</button><button class="small" id="clsClose">닫기</button></div>\n    <form id="clsLock" style="display:flex;flex-direction:column;gap:8px;padding:10px 2px" autocomplete="off"><span style="font-size:13px">🔒 비밀번호를 입력하세요</span><div style="display:flex;gap:6px"><input id="clsPw" type="password" inputmode="numeric" autocomplete="off" style="flex:1;min-width:0" aria-label="비밀번호"><button class="small primary" id="clsPwOk" type="submit">확인</button></div><span id="clsPwMsg" style="font-size:12px;color:#c62828;min-height:1.2em"></span></form>\n    <input id="clsQ" type="search" placeholder="검색" aria-label="검색">\n    <div id="clsList" style="overflow:auto;min-height:120px;max-height:46vh;border:1px solid var(--line);border-radius:6px"></div>\n    <div id="clsMsg" style="min-height:1.2em;font-size:12px;color:var(--muted)"></div>\n    <details id="clsTeach"><summary style="cursor:pointer;font-weight:600">선생님: 도면 올리기</summary>\n      <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;font-size:13px">\n        <div class="row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="flex:1">① 지금 모델을 .ldr로 저장 (블록 프로그램·시뮬레이터 설정 포함)</span><button class="small" id="clsSave">모델 저장</button></div>\n        <label style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span>② 반 이름 (폴더)</span><input id="clsGroup" type="text" placeholder="예: 월수 3시반" style="flex:1;min-width:140px"></label>\n        <div style="font-size:12px;color:var(--muted)"><span>올릴 위치</span>: <span class="num" id="clsPath"></span></div>\n        <div class="row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="flex:1">③ GitHub에 로그인해 파일을 끌어 놓고 Commit changes</span><button class="small primary" id="clsUpload">GitHub 업로드 열기</button></div>\n        <div style="font-size:12px;color:var(--muted)">올린 뒤 1~2분 안에 목록에 나타납니다. 올리려면 저장소 공동작업자(Collaborator) 권한이 필요합니다.</div>\n      </div>\n    </details>\n  </div>\n</div>'; document.body.appendChild(wrap.firstElementChild);
   // translatable static text: mark Korean originals, re-apply on language change
   const dlgEl = $('#clsDlg');
   dlgEl.querySelectorAll('strong,button,summary,span,div,label>span').forEach(e => { if (e.children.length === 0 && TR[e.textContent.trim()]) e.dataset.k = e.textContent.trim(); });
   dlgEl.querySelectorAll('[placeholder]').forEach(e => { e.dataset.kPh = e.getAttribute('placeholder'); });
   dlgEl.querySelector('[role=dialog]').dataset.kAria = '수업 도면';
+  // ---------- password lock (a light classroom lock; the files themselves stay in a public repository) ----------
+  const PW_H = 'xiq3uw';
+  const pwHash = s => { let h = 2166136261; for (const c of 'rm-cls:' + s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
+  const unlocked = () => { try { return sessionStorage.getItem('mscad.clsOk') === PW_H; } catch (e) { return false; } };
+  let onUnlock = null;
+  function clsShowLock(on) {
+    $('#clsLock').style.display = on ? 'flex' : 'none';
+    for (const id of ['#clsQ', '#clsList', '#clsMsg', '#clsTeach', '#clsRefresh']) $(id).style.display = on ? 'none' : '';
+    if (on) { $('#clsPw').value = ''; $('#clsPwMsg').textContent = ''; setTimeout(() => $('#clsPw').focus(), 0); }
+  }
+  $('#clsLock').addEventListener('submit', e => {
+    e.preventDefault();
+    if (pwHash($('#clsPw').value.trim()) !== PW_H) { $('#clsPwMsg').textContent = t('비밀번호가 맞지 않습니다'); $('#clsPw').select(); return; }
+    try { sessionStorage.setItem('mscad.clsOk', PW_H); } catch (e) { }
+    clsShowLock(false); const f = onUnlock; onUnlock = null; if (f) f();
+  });
+  function clsRequire(then) { if (unlocked()) { clsShowLock(false); then(); return; } onUnlock = then; $('#clsDlg').hidden = false; clsShowLock(true); }
   function clsLang() {
     document.querySelectorAll('[data-k]').forEach(e => { e.textContent = t(e.dataset.k); });
     document.querySelectorAll('[data-k-title]').forEach(e => { e.title = t(e.dataset.kTitle); });
@@ -78,6 +99,7 @@
   })();
   const CLS_KEY = 'mscad.classes';
   const CLS_EXT = /\.(ldr|mpd|zip)$/i;
+  const clsClean = n => n.replace(CLS_EXT, '').replace(/\s*\(\d+\)\s*$/, '').trim() || n.replace(CLS_EXT, ''); // "RM-LineBase (1)" -> "RM-LineBase"
   const clsRaw = (path, sha) => `https://raw.githubusercontent.com/${CLS.owner}/${CLS.repo}/${CLS.branch}/${path.split('/').map(encodeURIComponent).join('/')}${sha ? '?v=' + sha.slice(0, 12) : ''}`;
   const clsLink = rel => { const u = new URL(location.href); u.search = ''; u.hash = ''; u.searchParams.set('class', rel); return u.toString(); };
   async function clsFetchList(force) {
@@ -94,7 +116,7 @@
     const j = await r.json(), pre = CLS.dir + '/';
     const list = (j.tree || []).filter(f => f.type === 'blob' && f.path.startsWith(pre) && CLS_EXT.test(f.path)).map(f => {
       const rel = f.path.slice(pre.length), parts = rel.split('/'), name = parts.pop();
-      return { path: f.path, rel, group: parts.join(' / '), name: name.replace(CLS_EXT, ''), file: name, sha: f.sha, size: f.size || 0 };
+      return { path: f.path, rel, group: parts.join(' / '), name: clsClean(name), file: name, sha: f.sha, size: f.size || 0 };
     }).sort((a, b) => a.group.localeCompare(b.group, 'ko') || a.name.localeCompare(b.name, 'ko', { numeric: true }));
     CLS.list = list; CLS.at = Date.now();
     try { localStorage.setItem(CLS_KEY, JSON.stringify({ repo: CLS.owner + '/' + CLS.repo, at: CLS.at, list })); } catch (e) { }
@@ -106,8 +128,9 @@
     status(t('수업 도면 받는 중… {0}', file));
     const r = await fetch(clsRaw(path, sha || String(Date.now())), { cache: 'no-cache' });
     if (!r.ok) throw new Error(t('수업 도면을 찾을 수 없습니다: {0}', rel));
-    await clsOpenFile(new File([await r.blob()], file));
-    status(t('수업 도면 "{0}"을(를) 열었습니다 · 되돌리려면 ↶', file.replace(CLS_EXT, '')));
+    const ext = (file.match(CLS_EXT) || ['.ldr'])[0];
+    await clsOpenFile(new File([await r.blob()], clsClean(file) + ext));
+    status(t('수업 도면 "{0}"을(를) 열었습니다 · 되돌리려면 ↶', clsClean(file)));
   }
   function clsMsg(s, err) { const e = $('#clsMsg'); e.textContent = s || ''; e.style.color = err ? '#c62828' : ''; }
   function clsRender() {
@@ -140,7 +163,7 @@
     return `https://github.com/${CLS.owner}/${CLS.repo}/upload/${CLS.branch}/${CLS.dir}${g ? '/' + g : ''}`;
   }
   (function clsInit() {
-    $('#btnClass').onclick = () => { $('#clsDlg').hidden = false; $('#clsQ').value = ''; clsLoad(false); setTimeout(() => $('#clsQ').focus(), 0); };
+    $('#btnClass').onclick = () => { $('#clsDlg').hidden = false; clsRequire(() => { $('#clsQ').value = ''; clsLoad(false); setTimeout(() => $('#clsQ').focus(), 0); }); };
     $('#clsClose').onclick = () => { $('#clsDlg').hidden = true; };
     $('#clsDlg').addEventListener('click', e => { if (e.target.id === 'clsDlg') $('#clsDlg').hidden = true; });
     $('#clsRefresh').onclick = () => clsLoad(true);
@@ -165,8 +188,8 @@
     const rel = new URLSearchParams(location.search).get('class'); if (!rel) return;
     const clean = rel.replace(/^\/+/, '').replace(/^classes\//, '');
     if (clean.split('/').includes('..') || !CLS_EXT.test(clean)) return;
-    try { await clsOpen(clean); } catch (e) { status(e.message); }
     try { const u = new URL(location.href); u.searchParams.delete('class'); window.history.replaceState(null, '', u); } catch (e) { }
+    clsRequire(async () => { $('#clsDlg').hidden = true; try { await clsOpen(clean); } catch (e) { status(e.message); } });
   }
 
   clsLang();
