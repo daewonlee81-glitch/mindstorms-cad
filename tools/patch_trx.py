@@ -4,8 +4,6 @@
 import sys
 p = sys.argv[1]
 s = open(p, encoding='utf-8').read()
-if 'window.__trx' in s:
-    print('already patched'); sys.exit(0)
 R = [
  # trTaskOf: a field with its own judge
  ('function Cv(){let n=Nt?.jbcTask;',
@@ -26,6 +24,17 @@ R = [
  # so the second stop hit that field's motor and this field's right wheel kept turning (curved runs in training)
  ('async wbDbStop(){ge();let n=sr();await Wn.motorStop(n.L),await Wn.motorStop(n.R)}',
   'async wbDbStop(){ge();let n=sr();await Promise.all([Wn.motorStop(n.L),Wn.motorStop(n.R)])}'),
+ # learning model (search method) chosen in the trainer: trainmodel.js sets window.__trs; without it the
+ # built-in cross-entropy search runs as before
+ ('for(;x.length<l;)x.push(a.map((E,w)=>w<y?E.q(d[w]+p[w]*X2()):0));',
+  'if(window.__trs&&window.__trs.on())window.__trs.gen({x,N:l,dims:a,lim:y,mean:d,sd:p,best:u,g,gauss:X2});else for(;x.length<l;)x.push(a.map((E,w)=>w<y?E.q(d[w]+p[w]*X2()):0));'),
+ ('let M=A.slice(0,c);if(d=a.map((E,w)=>M.reduce((b,S)=>b+S.P[w],0)/c),p=a.map((E,w)=>{let b=Math.sqrt(M.reduce((S,U)=>S+(U.P[w]-d[w])**2,0)/c);return Math.max(E.sd0*.08,.6*b+.4*p[w]*.85)}),t.grow&&f>=4',
+  'let M=A.slice(0,c);if(window.__trs&&window.__trs.on()?(window.__trsO=window.__trs.update({ranked:A,dims:a,mean:d,sd:p,best:u,still:f,elite:c,g,lim:y}),d=window.__trsO.mean,p=window.__trsO.sd):(d=a.map((E,w)=>M.reduce((b,S)=>b+S.P[w],0)/c),p=a.map((E,w)=>{let b=Math.sqrt(M.reduce((S,U)=>S+(U.P[w]-d[w])**2,0)/c);return Math.max(E.sd0*.08,.6*b+.4*p[w]*.85)})),t.grow&&f>=4'),
+ # learning model "신경망": trainmodel.js gives its own training spec and its own "apply best"
+ ('t=K.mode==="gen"?e==="LINE"?E0(n.ctrl||P("#trCtrl").value):W2():z2()',
+  't=window.__trs&&window.__trs.spec&&window.__trs.spec(e)||(K.mode==="gen"?e==="LINE"?E0(n.ctrl||P("#trCtrl").value):W2():z2())'),
+ ('function qh(){if(K.best){',
+  'function qh(){if(window.__trs&&window.__trs.apply&&window.__trs.apply())return;if(K.best){'),
  # trainer grid: draw each world's own floor
  # search: on fields with random layouts the best program is re-run on a new layout every generation (it is always
  # candidate #1); keep its score as the average of all its runs so one lucky layout cannot win
@@ -34,9 +43,11 @@ R = [
  ('s.drawImage(lo,0,0),s.strokeStyle="rgba(30,90,200,.75)"',
   's.drawImage(lo,0,0),u.matC&&s.drawImage(u.matC,r.dx,r.dy,ut*o,yt*o),s.strokeStyle="rgba(30,90,200,.75)"'),
 ]
+done = 0
 for a, b in R:
+    if b in s: continue  # already applied
     n = s.count(a)
     if n != 1: sys.exit(f'pattern found {n} times: {a[:60]}')
-    s = s.replace(a, b)
+    s = s.replace(a, b); done += 1
 open(p, 'w', encoding='utf-8').write(s)
-print('patched', len(R))
+print('patched', done, 'of', len(R))
