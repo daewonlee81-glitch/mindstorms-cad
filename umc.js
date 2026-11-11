@@ -3,7 +3,7 @@
 //   · 경기장을 고를 때마다, 그리고 점수판의 "새 배치" 버튼을 누를 때마다 배치가 무작위로 바뀝니다.
 //   · 점수판에 과제·실시간 자동 채점·남은 시간(런당 2분)을 보여 줍니다.
 //   · app.js 에는 window.__umc 훅 한 곳만 들어 있습니다. app.js 를 다시 빌드하면 이 훅을 다시 넣어야 합니다:
-//       window.__umc={mats:uo,api:Wn,T:T,esc:ce,i18n:pr,pose:()=>Te,props:()=>Xe,time:()=>vt,hub:()=>We,sim:()=>q,robot:()=>Q,mat:()=>Nt};
+//       window.__umc={mats:uo,api:Wn,T:T,esc:ce,i18n:pr,pose:()=>Te,props:()=>Xe,time:()=>vt,hub:()=>We,sim:()=>q,robot:()=>Q,mat:()=>Nt,cam:()=>wi,ctl:()=>Mi};
 //     (uo=경기장 표, Wn=시뮬레이터 API, pr=번역 표, Te=로봇 위치, Xe=물체, vt=시뮬레이션 시간, We=허브 화면, q=시뮬레이터 상태, Q=로봇, Nt=현재 경기장)
 //   · 규정 기준: UMC 미지 미션 챌린지 운영 매뉴얼. 단위는 mm (캔버스 1px = 1mm).
 (() => {
@@ -97,10 +97,10 @@
       `<button class="small" style="margin-left:6px" onpointerdown="window.__umcNew&&window.__umcNew()">🎲 ${esc(L('새 배치', 'New layout'))}</button>` +
       `<button class="small" style="margin-left:4px" onpointerdown="window.__umcGuide&&window.__umcGuide('on')">📖 ${esc(L('단계별 설명', 'Step-by-step'))}</button><br>` +
       `<span style="font-weight:400">${esc(mat.task())}</span><br>` +
-      (mat.head ? `<span style="font-weight:400;color:#1b3f85">${mat.head()}</span><br>` : '') +
+      (mat.head ? `<span style="font-weight:400;color:#3d8bfd">${mat.head()}</span><br>` : '') +
       `<span style="font-weight:400">${mat.compact ? rows.reduce((o, r, i) => o + (i ? (i % 2 ? ' &nbsp;' : '<br>') : '') + r, '') : rows.join('<br>')}</span><br>` +
-      `<b>${esc(L('합계', 'Total'))} ${total} / ${mat.max}</b> · <span style="font-weight:400;color:${over ? '#d22323' : '#5b6878'}">${over ? esc(L('시간 초과 (2분)', 'Time up (2 min)')) : esc(L('남은 시간', 'Time left')) + ' ' + mm + ':' + ss}</span>` +
-      (extra ? `<br><span style="font-weight:400;color:#8a5a00">${extra}</span>` : '') +
+      `<b>${esc(L('합계', 'Total'))} ${total} / ${mat.max}</b> · <span style="font-weight:400;color:${over ? '#d22323' : '#8a94a3'}">${over ? esc(L('시간 초과 (2분)', 'Time up (2 min)')) : esc(L('남은 시간', 'Time left')) + ' ' + mm + ':' + ss}</span>` +
+      (extra ? `<br><span style="font-weight:400;color:#c98a1a">${extra}</span>` : '') +
       (fell() && !mat.compact ? `<br><span style="font-weight:400;color:#d22323">${esc(L('로봇이 테이블에서 떨어졌습니다 (실제 대회에서는 런 종료)', 'The robot fell off the table (the run ends in a real event)'))}</span>` : '') + `</div>`;
     if (over) R.frozen = html;
     return html;
@@ -116,7 +116,7 @@
     const st = stepsOf(mat), n = st.length, i = Math.max(0, Math.min(n - 1, GUIDE.i)), [title, text] = st[i] || ['', ''];
     const btn = (act, label, dis) => `<button class="small" style="margin-right:4px" ${dis ? 'disabled' : ''} onpointerdown="window.__umcGuide('${act}')">${label}</button>`;
     return `<div style="display:block;line-height:1.5;max-width:520px"><b>📖 ${esc(U.T(mat.label))}</b><br>` +
-      `<span style="color:#1657c4"><b>${i + 1} / ${n} · ${esc(title)}</b></span><br>` +
+      `<span style="color:#3d8bfd"><b>${i + 1} / ${n} · ${esc(title)}</b></span><br>` +
       `<span style="font-weight:400">${text}</span><br>` +
       `<span style="display:inline-block;margin-top:4px">${btn('prev', '◀ ' + esc(L('이전', 'Back')), i === 0)}${btn('next', esc(L('다음', 'Next')) + ' ▶', i === n - 1)}${btn('off', '✕ ' + esc(L('설명 닫기', 'Close')))}</span></div>`;
   }
@@ -550,7 +550,35 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
   addGroup('UMC 미지 미션 챌린지', list);
   addGroup(GT, glist);
   for (const m of Object.values(U.mats)) if (m && m.umc && !m._hi) { const d0 = m.draw; m.draw = function (c) { d0.call(this, c); hiDraw(m, c); }; m._hi = 1; }
-  const redraw = () => { const m = cur(); if (m && sel && typeof sel.onchange === 'function') { sel.value = m.key; R = null; sel.onchange({ target: sel }); } };
+  // ───── 화면 끌기 ─────
+  // · "위에서" 시점: 왼쪽 버튼(또는 한 손가락)으로 끌면 화면이 움직입니다. (원래는 아무 동작도 없었음)
+  // · "비스듬히" 시점: 왼쪽 끌기는 회전 그대로, Shift+끌기 · 오른쪽 버튼 끌기 · 두 손가락 끌기로 화면이 움직입니다.
+  // · UMC·Robofest 경기장을 고르면 점수판에 가리지 않도록 화면을 점수판 높이만큼 자동으로 내립니다.
+  const view = {
+    save() { const c = U.cam && U.cam(), k = U.ctl && U.ctl(); return c && k ? { p: c.position.clone(), t: k.target.clone() } : null; },
+    load(v) { const c = U.cam && U.cam(), k = U.ctl && U.ctl(); if (v && c && k) { c.position.copy(v.p); k.target.copy(v.t); k.update(); } },
+    buttons() {
+      const k = U.ctl && U.ctl(), q = U.sim(); if (!k || !k.mouseButtons) return;
+      const top = q && q.cam === 'top';
+      k.enablePan = true; k.screenSpacePanning = true;
+      k.mouseButtons.LEFT = top ? 2 : 0;   // three.js MOUSE: ROTATE 0, PAN 2
+      if (k.touches) k.touches.ONE = top ? 1 : 0; // TOUCH: ROTATE 0, PAN 1
+    },
+    lower() { // 점수판 높이의 절반만큼 화면을 아래로
+      const k = U.ctl && U.ctl(), q = U.sim(), box = document.querySelector('#simScoreBox'), cv = document.querySelector('#simCanvas');
+      if (!k || !cur() || !box || box.hidden || !cv || (q && q.cam === 'follow') || typeof k._pan !== 'function') return;
+      const b = box.getBoundingClientRect(), c = cv.getBoundingClientRect(), cover = Math.max(0, Math.min(b.bottom, c.bottom) - c.top);
+      if (cover < 40) return;
+      k._pan(0, Math.min(cover * 0.55, c.height * 0.35)); k.update();
+    },
+    after(auto) { setTimeout(() => { view.buttons(); }, 0); if (auto) setTimeout(() => { view.buttons(); view.lower(); }, 260); },
+  };
+  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-simcam]')) view.after(true); }, true);
+  if (sel) sel.addEventListener('change', () => view.after(true));
+  const mode = document.querySelector('#modeSim'); if (mode) mode.addEventListener('click', () => view.after(true));
+  view.after(false);
+  // 설명 단계 이동·새 배치로 경기장을 다시 그릴 때는 사용자가 맞춰 둔 화면을 그대로 둡니다.
+  const redraw = () => { const m = cur(); if (m && sel && typeof sel.onchange === 'function') { const v = view.save(); sel.value = m.key; R = null; sel.onchange({ target: sel }); view.load(v); view.after(false); } };
   window.__umcGuide = act => {
     const m = cur(); if (!m) return;
     const n = stepsOf(m).length;
@@ -563,8 +591,7 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
   // 새 배치: 현재 미션의 배치를 버리고 경기장을 다시 불러옵니다 (프로그램은 멈춥니다).
   window.__umcNew = () => {
     const m = cur(); if (!m || !sel) return;
-    delete LAY[m.umc]; R = null; sel.value = m.key;
-    if (typeof sel.onchange === 'function') sel.onchange({ target: sel });
+    delete LAY[m.umc]; redraw();
   };
   // 경기장을 고를 때마다 새 배치
   if (sel) sel.addEventListener('change', e => { GUIDE.on = false; const m = U.mats[e.target.value]; if (m && m.umc) { delete LAY[m.umc]; R = null; } }, true);

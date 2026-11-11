@@ -68,7 +68,9 @@ LEGO®, MINDSTORMS®, SPIKE™는 LEGO Group의 상표이며, 이 프로젝트�
 - `app.js` 에는 훅 한 곳(`window.__umc`)만 들어 있습니다. app.js 를 다시 빌드하면 `window.__wb={` 바로 앞에 아래 한 줄을 다시 넣어야 합니다.
 
 ```js
-window.__umc={mats:uo,api:Wn,T:T,esc:ce,i18n:pr,pose:()=>Te,props:()=>Xe,time:()=>vt,hub:()=>We,sim:()=>q,robot:()=>Q,mat:()=>Nt};
+window.__umc={mats:uo,api:Wn,T:T,esc:ce,i18n:pr,pose:()=>Te,props:()=>Xe,time:()=>vt,hub:()=>We,sim:()=>q,robot:()=>Q,mat:()=>Nt,cam:()=>wi,ctl:()=>Mi};
 ```
 
-빌드할 때마다 줄인 변수 이름(`uo`, `Wn` 등)이 바뀔 수 있습니다. 순서대로 경기장 표, 시뮬레이터 API, 번역 함수, HTML 이스케이프, 번역 표, 로봇 위치, 물체 목록, 시뮬레이션 시간, 허브 화면 상태, 시뮬레이터 상태, 로봇, 현재 경기장입니다.
+빌드할 때마다 줄인 변수 이름(`uo`, `Wn` 등)이 바뀔 수 있습니다. 순서대로 경기장 표, 시뮬레이터 API, 번역 함수, HTML 이스케이프, 번역 표, 로봇 위치, 물체 목록, 시뮬레이션 시간, 허브 화면 상태, 시뮬레이터 상태, 로봇, 현재 경기장, 카메라, 카메라 조작(OrbitControls)입니다.
+
+화면 끌기: "위에서" 시점은 왼쪽 버튼(한 손가락)으로 끌어 화면을 옮깁니다. "비스듬히" 시점은 Shift+끌기, 오른쪽 버튼 끌기, 두 손가락 끌기로 옮깁니다. UMC·Robofest 경기장을 고르면 점수판에 가리지 않도록 화면이 자동으로 내려갑니다.
