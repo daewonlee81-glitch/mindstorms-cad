@@ -91,6 +91,7 @@
       return `<span style="color:${colr}">${mark} ${esc(label)} <b>${g > 0 ? '+' : ''}${g}</b><span style="color:#8a94a3"> / ${pts}</span></span>`;
     });
     total = Math.max(0, total);
+    R.total = total; // 자동 학습이 읽는 점수
     const over = R.el >= LIMIT;
     const left = Math.max(0, LIMIT - R.el), mm = Math.floor(left / 60), ss = String(Math.floor(left % 60)).padStart(2, '0');
     const html = `<div style="display:block;line-height:${mat.compact ? 1.3 : 1.45};max-width:${mat.compact ? 620 : 440}px;${mat.compact ? 'font-size:12px' : ''}"><b>${esc(U.T(mat.label))}</b> ` +
@@ -595,5 +596,60 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
   };
   // 경기장을 고를 때마다 새 배치
   if (sel) sel.addEventListener('change', e => { GUIDE.on = false; const m = U.mats[e.target.value]; if (m && m.umc) { delete LAY[m.umc]; R = null; } }, true);
+
+  // ───── 자동 학습을 경기 조건에 맞추기 (app.js 의 window.__trx 훅) ─────
+  // · 학습기의 경기장(16개)마다 이 미션의 배치를 새로 뽑습니다 (미지 미션처럼 매번 다른 배치).
+  //   바닥 그림·벽·물체·출발 위치가 경기장마다 따로이고, 런 기록(삐 소리·화면 숫자·출발 구역 등)도 경기장마다 따로 셉니다.
+  // · 점수는 위 점수판과 같은 채점표 점수(주니어·시니어 조건, 2분 제한)를 100점 만점으로 바꿔 씁니다.
+  const startOf = m => { const s = m.start || {}; return { x: s.x || 0, z: s.z || 0, th: s.th || 0 }; };
+  const cloneRun = r => r && { ...r, writes: r.writes.slice(), x: JSON.parse(JSON.stringify(r.x || {})) };
+  window.__trx = {
+    task: () => (cur() ? 'UMC' : null),
+    world(w, mk) {
+      const m = cur(); if (!m) { w.props = mk(); return; }
+      const n = m.umc, keep = LAY[n], had = Object.prototype.hasOwnProperty.call(LAY, n);
+      const s0 = startOf(m);
+      try {
+        LAY[n] = GEN[n](); w.umcLay = LAY[n];
+        const s1 = startOf(m); w.px += s1.x - s0.x; w.pz += s1.z - s0.z; w.pth += s1.th - s0.th;
+        if (w.wbs && 'head' in w.wbs) w.wbs.head = w.pth;
+        w.props = mk();
+        const c = document.createElement('canvas'); c.width = m.w; c.height = m.h;
+        const g = c.getContext('2d'); m.draw(g); w.matC = c; w.matD = g.getImageData(0, 0, m.w, m.h).data;
+        w.walls = (m.walls || []).map(a => ({ x0: a[0] - a[2] / 2, x1: a[0] + a[2] / 2, z0: a[1] - a[3] / 2, z1: a[1] + a[3] / 2, h: a[4] ?? 80 }));
+        w.umcR = null;
+      } finally { if (had) LAY[n] = keep; else delete LAY[n]; }
+    },
+    save(c) { c.umcR = R; const m = cur(); if (m && !c.umcLay && LAY[m.umc]) c.umcLay = LAY[m.umc]; },
+    load(c) { R = c.umcR || null; const m = cur(); if (m && c.umcLay) LAY[m.umc] = c.umcLay; },
+    judge() {
+      const m = cur(); GUIDE.on = false; let acc = 1;
+      const score = () => {
+        const keep = R, sim = U.sim(), run = sim.running;
+        R = cloneRun(keep); sim.running = { stopped: true }; // 이 순간 런이 끝났다고 보고 채점 (기록은 건드리지 않음)
+        try { m.info(); return R ? { total: R.total || 0, el: R.el || 0, ended: R.ended } : { total: 0, el: 0 }; }
+        finally { R = keep; sim.running = run; }
+      };
+      return {
+        step(dt) { acc += dt; if (acc >= 0.05) { acc = 0; m.info(); } }, // 점수판과 같은 간격으로 런을 따라감
+        over: () => !!(R && R.frozen), // 2분이 지나면 이 경기장은 끝
+        result() {
+          const r = score(), pct = 100 * r.total / (m.max || 100);
+          return { pct, done: r.total >= m.max, tDone: r.total >= m.max ? r.el : null, note: `${r.total}/${m.max}${L('점', ' pts')}` };
+        },
+      };
+    },
+    info() { const m = cur(); return m ? { label: U.T(m.label), task: m.task(), max: m.max, limit: LIMIT } : null; },
+  };
+  // 학습 창: UMC·게임 경기장이면 과제 설명·시간 제한(2분)을 경기 조건으로 맞추고, 센서 없이 움직임만 조합하는 "블록 자동 생성"은 끕니다.
+  const trainUI = () => {
+    const m = cur(), box = document.querySelector('#trTask'); if (!m || !box) return;
+    box.innerHTML = `<b>${esc(U.T(m.label))}</b> — ${esc(m.task())}<br><span style="color:#3d8bfd">${esc(L('경기 조건으로 학습: 16개 경기장마다 배치를 무작위로 새로 놓고, 점수판과 같은 채점표 점수(만점 ' + m.max + '점, 2분)로 숫자를 찾습니다.', 'Trained on the match rules: each of the 16 fields gets a new random layout, scored with the same scorecard as the panel (max ' + m.max + ' pts, 2 min).'))}</span>`;
+    const tm = document.querySelector('#trTime'); if (tm && !tm.dataset.umc) { tm.value = LIMIT; tm.dataset.umc = '1'; }
+    const gen = document.querySelector('#trModeGen');
+    if (gen) { gen.disabled = true; gen.title = L('미지 미션은 배치가 매번 달라 센서를 써야 하므로, 블록 자동 생성 대신 숫자 튜닝으로 학습합니다.', 'Unknown missions change every time and need sensors, so they are trained by number tuning instead of block generation.'); }
+    const tune = document.querySelector('#trModeTune'); if (tune && tune.getAttribute('aria-pressed') !== 'true') tune.click();
+  };
+  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#simTrain')) setTimeout(trainUI, 0); });
   window.__umcDebug = { lay, LAY, run: () => R, guide: GUIDE, steps: stepsOf };
 })();

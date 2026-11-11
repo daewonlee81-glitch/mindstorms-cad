@@ -8,6 +8,15 @@
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const TR = {
+  "내 로봇 모형 유지 (도면의 프로그램·경기장만 가져오기)": ["Keep my robot model (take only the file's program and field)", "自分のロボットモデルを残す（図面のプログラム・競技場だけ取り込む）", "保留我的机器人模型（只取图纸的程序和场地）", "Mantener mi robot (solo tomar el programa y el campo del archivo)"],
+  "수업 도면 \"{0}\"의 프로그램과 경기장을 내 로봇 \"{1}\"에 적용했습니다 · 열기 전 상태는 🕘 기록에 있습니다": ["Applied the program and field of \"{0}\" to my robot \"{1}\" · the state before opening is in 🕘 History", "授業の図面「{0}」のプログラムと競技場を自分のロボット「{1}」に適用しました · 開く前の状態は 🕘 履歴にあります", "已将课程图纸「{0}」的程序和场地应用到我的机器人「{1}」· 打开前的状态在 🕘 记录中", "Programa y campo de \"{0}\" aplicados a mi robot \"{1}\" · el estado anterior está en 🕘 Historial"],
+  "도면에 들어 있던 로봇 대신 내 로봇을 썼습니다. 도면의 로봇을 쓰려면 \"내 로봇 모형 유지\"를 끄고 다시 여세요.": ["Used my robot instead of the robot in the file. To use the file's robot, untick \"Keep my robot model\" and open it again.", "図面のロボットの代わりに自分のロボットを使いました。図面のロボットを使うには「自分のロボットモデルを残す」を外して開き直してください。", "使用了我的机器人而不是图纸中的机器人。要使用图纸中的机器人，请取消勾选“保留我的机器人模型”后重新打开。", "Se usó mi robot en lugar del robot del archivo. Para usar el del archivo, desmarca \"Mantener mi robot\" y ábrelo de nuevo."],
+  "⚠ 포트 확인: {0}": ["⚠ Check ports: {0}", "⚠ ポート確認: {0}", "⚠ 检查端口: {0}", "⚠ Revisa los puertos: {0}"],
+  "프로그램은 {0}를 {1} 포트로 쓰는데 내 로봇은 {2}": ["the program uses the {0} on port {1}, my robot has it on {2}", "プログラムは{0}を{1}ポートで使いますが、自分のロボットは{2}", "程序在 {1} 端口使用{0}，我的机器人在 {2}", "el programa usa el {0} en el puerto {1}, mi robot lo tiene en {2}"],
+  "컬러 센서": ["color sensor", "カラーセンサー", "颜色传感器", "sensor de color"],
+  "거리 센서": ["distance sensor", "距離センサー", "距离传感器", "sensor de distancia"],
+  "포스 센서": ["force sensor", "フォースセンサー", "力传感器", "sensor de fuerza"],
+  "없음": ["none", "なし", "没有", "ninguno"],
   "🔒 비밀번호를 입력하세요": ["🔒 Enter the password", "🔒 パスワードを入力してください", "🔒 请输入密码", "🔒 Introduce la contraseña"],
   "확인": ["OK", "OK", "确定", "Aceptar"],
   "비밀번호가 맞지 않습니다": ["Wrong password", "パスワードが違います", "密码不正确", "Contraseña incorrecta"],
@@ -60,7 +69,7 @@
   const exp = $('#btnExport');
   const btn = document.createElement('button'); btn.id = 'btnClass'; btn.dataset.k = '📥 수업 도면'; btn.dataset.kTitle = '선생님이 올린 도면 받기';
   exp.after(btn);
-  const wrap = document.createElement('div'); wrap.innerHTML = '<div id="clsDlg" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:grid;place-items:center;z-index:20;padding:16px">\n  <div role="dialog" aria-label="수업 도면" style="background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;width:min(560px,100%);max-height:90vh;display:flex;flex-direction:column;gap:8px">\n    <div class="row" style="display:flex;gap:6px;align-items:center"><strong style="flex:1">📥 수업 도면</strong><button class="small" id="clsRefresh">새로고침</button><button class="small" id="clsClose">닫기</button></div>\n    <form id="clsLock" style="display:flex;flex-direction:column;gap:8px;padding:10px 2px" autocomplete="off"><span style="font-size:13px">🔒 비밀번호를 입력하세요</span><div style="display:flex;gap:6px"><input id="clsPw" type="password" inputmode="numeric" autocomplete="off" style="flex:1;min-width:0" aria-label="비밀번호"><button class="small primary" id="clsPwOk" type="submit">확인</button></div><span id="clsPwMsg" style="font-size:12px;color:#c62828;min-height:1.2em"></span></form>\n    <input id="clsQ" type="search" placeholder="검색" aria-label="검색">\n    <div id="clsList" style="overflow:auto;min-height:120px;max-height:46vh;border:1px solid var(--line);border-radius:6px"></div>\n    <div id="clsMsg" style="min-height:1.2em;font-size:12px;color:var(--muted)"></div>\n    <details id="clsTeach"><summary style="cursor:pointer;font-weight:600">선생님: 도면 올리기</summary>\n      <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;font-size:13px">\n        <div class="row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="flex:1">① 지금 모델을 .ldr로 저장 (블록 프로그램·시뮬레이터 설정 포함)</span><button class="small" id="clsSave">모델 저장</button></div>\n        <label style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span>② 반 이름 (폴더)</span><input id="clsGroup" type="text" placeholder="예: 월수 3시반" style="flex:1;min-width:140px"></label>\n        <div style="font-size:12px;color:var(--muted)"><span>올릴 위치</span>: <span class="num" id="clsPath"></span></div>\n        <div class="row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="flex:1">③ GitHub에 로그인해 파일을 끌어 놓고 Commit changes</span><button class="small primary" id="clsUpload">GitHub 업로드 열기</button></div>\n        <div style="font-size:12px;color:var(--muted)">올린 뒤 1~2분 안에 목록에 나타납니다. 올리려면 저장소 공동작업자(Collaborator) 권한이 필요합니다.</div>\n      </div>\n    </details>\n  </div>\n</div>'; document.body.appendChild(wrap.firstElementChild);
+  const wrap = document.createElement('div'); wrap.innerHTML = '<div id="clsDlg" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:grid;place-items:center;z-index:20;padding:16px">\n  <div role="dialog" aria-label="수업 도면" style="background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;width:min(560px,100%);max-height:90vh;display:flex;flex-direction:column;gap:8px">\n    <div class="row" style="display:flex;gap:6px;align-items:center"><strong style="flex:1">📥 수업 도면</strong><button class="small" id="clsRefresh">새로고침</button><button class="small" id="clsClose">닫기</button></div>\n    <form id="clsLock" style="display:flex;flex-direction:column;gap:8px;padding:10px 2px" autocomplete="off"><span style="font-size:13px">🔒 비밀번호를 입력하세요</span><div style="display:flex;gap:6px"><input id="clsPw" type="password" inputmode="numeric" autocomplete="off" style="flex:1;min-width:0" aria-label="비밀번호"><button class="small primary" id="clsPwOk" type="submit">확인</button></div><span id="clsPwMsg" style="font-size:12px;color:#c62828;min-height:1.2em"></span></form>\n    <input id="clsQ" type="search" placeholder="검색" aria-label="검색">\n    <label id="clsKeepRow" style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="clsKeep" checked><span>내 로봇 모형 유지 (도면의 프로그램·경기장만 가져오기)</span></label>\n    <div id="clsList" style="overflow:auto;min-height:120px;max-height:46vh;border:1px solid var(--line);border-radius:6px"></div>\n    <div id="clsMsg" style="min-height:1.2em;font-size:12px;color:var(--muted)"></div>\n    <details id="clsTeach"><summary style="cursor:pointer;font-weight:600">선생님: 도면 올리기</summary>\n      <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;font-size:13px">\n        <div class="row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="flex:1">① 지금 모델을 .ldr로 저장 (블록 프로그램·시뮬레이터 설정 포함)</span><button class="small" id="clsSave">모델 저장</button></div>\n        <label style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span>② 반 이름 (폴더)</span><input id="clsGroup" type="text" placeholder="예: 월수 3시반" style="flex:1;min-width:140px"></label>\n        <div style="font-size:12px;color:var(--muted)"><span>올릴 위치</span>: <span class="num" id="clsPath"></span></div>\n        <div class="row" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="flex:1">③ GitHub에 로그인해 파일을 끌어 놓고 Commit changes</span><button class="small primary" id="clsUpload">GitHub 업로드 열기</button></div>\n        <div style="font-size:12px;color:var(--muted)">올린 뒤 1~2분 안에 목록에 나타납니다. 올리려면 저장소 공동작업자(Collaborator) 권한이 필요합니다.</div>\n      </div>\n    </details>\n  </div>\n</div>'; document.body.appendChild(wrap.firstElementChild);
   // translatable static text: mark Korean originals, re-apply on language change
   const dlgEl = $('#clsDlg');
   dlgEl.querySelectorAll('strong,button,summary,span,div,label>span').forEach(e => { if (e.children.length === 0 && TR[e.textContent.trim()]) e.dataset.k = e.textContent.trim(); });
@@ -73,7 +82,7 @@
   let onUnlock = null;
   function clsShowLock(on) {
     $('#clsLock').style.display = on ? 'flex' : 'none';
-    for (const id of ['#clsQ', '#clsList', '#clsMsg', '#clsTeach', '#clsRefresh']) $(id).style.display = on ? 'none' : '';
+    for (const id of ['#clsQ', '#clsList', '#clsMsg', '#clsTeach', '#clsRefresh', '#clsKeepRow']) $(id).style.display = on ? 'none' : '';
     if (on) { $('#clsPw').value = ''; $('#clsPwMsg').textContent = ''; setTimeout(() => $('#clsPw').focus(), 0); }
   }
   $('#clsLock').addEventListener('submit', e => {
@@ -123,13 +132,63 @@
     return list;
   }
   function clsCached() { if (CLS.list) return CLS.list; try { const c = JSON.parse(localStorage.getItem(CLS_KEY) || 'null'); if (c && c.repo === CLS.owner + '/' + CLS.repo) return c.list; } catch (e) { } return null; }
+  // the lesson's program and field go onto the robot that is open now: open the file as usual, then the app's
+  // own undo brings back the previous parts and steps while keeping the newly loaded program and simulator settings
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  function portCheck() {
+    try {
+      const q = window.__umc && window.__umc.robot && window.__umc.robot(), ws = window.__wb && window.__wb.ws && window.__wb.ws();
+      if (!q || !q.sensors || !ws) return '';
+      const KIND = [[/^rm_color_/, 'color', '컬러 센서'], [/^rm_ultra_/, 'distance', '거리 센서'], [/^rm_force_/, 'force', '포스 센서']], seen = new Set(), bad = [];
+      for (const b of ws.getAllBlocks(false)) {
+        const k = KIND.find(x => x[0].test(b.type)); if (!k) continue;
+        const port = b.getFieldValue && b.getFieldValue('PORT'); if (!port || seen.has(k[1] + port)) continue; seen.add(k[1] + port);
+        const have = q.sensors.filter(x => x.kind === k[1]).map(x => x.port);
+        if (!have.includes(port)) bad.push(t('프로그램은 {0}를 {1} 포트로 쓰는데 내 로봇은 {2}', t(k[2]), port, have.length ? have.join(', ') : t('없음')));
+      }
+      return bad.length ? t('⚠ 포트 확인: {0}', bad.join(' · ')) : '';
+    } catch (e) { return ''; }
+  }
+  // opening a file while the simulator is showing does not switch the field by itself: pick the lesson's field
+  async function clsApplyField() {
+    const wb = window.__wb, M = window.__cad && window.__cad.model, sel = $('#simMat');
+    if (!wb || !wb.simOn || !wb.simOn() || !M || !M.sim || !M.sim.mat || !sel || typeof sel.onchange !== 'function') return;
+    if (![...sel.options].some(o => o.value === M.sim.mat)) return;
+    const st = M.sim.start ? JSON.parse(JSON.stringify(M.sim.start)) : null;
+    if (sel.value !== M.sim.mat) { sel.value = M.sim.mat; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (st) { M.sim.start = st; try { wb.save(); } catch (e) { } const r = $('#simReset'); if (r) r.click(); }
+    await sleep(300);
+  }
+  async function clsOpenKeep(file, label) {
+    const cad = window.__cad, mine = cad.model, myProg = mine.program;
+    await clsOpenFile(file);
+    const L = cad.model, lessonParts = (L.parts || []).length, lsim = L.sim ? JSON.parse(JSON.stringify(L.sim)) : null, lprog = L.program;
+    if (lessonParts && !lprog) return false; // a robot model file (no program): open it as it is
+    $('#btnUndo').click();
+    for (let i = 0; i < 50 && cad.model === L; i++) await sleep(40);
+    const M = cad.model;
+    for (let i = 0; i < 150 && cad.objs && cad.objs.size < (M.parts || []).length; i++) await sleep(40); // part meshes rebuilt (the sim robot is made from them)
+    if (lsim) M.sim = lsim;
+    M.program = lprog || myProg;
+    try { window.__wb && window.__wb.save && window.__wb.save(); } catch (e) { }
+    if (window.__wb && window.__wb.simOn && window.__wb.simOn()) { try { window.__wb.enterSim(); } catch (e) { } await sleep(600); }
+    await clsApplyField();
+    const msg = [t('수업 도면 "{0}"의 프로그램과 경기장을 내 로봇 "{1}"에 적용했습니다 · 열기 전 상태는 🕘 기록에 있습니다', label, M.name)];
+    if (lessonParts) msg.push(t('도면에 들어 있던 로봇 대신 내 로봇을 썼습니다. 도면의 로봇을 쓰려면 "내 로봇 모형 유지"를 끄고 다시 여세요.'));
+    const pc = portCheck(); if (pc) msg.push(pc);
+    status(msg.join(' '));
+    return true;
+  }
   async function clsOpen(rel, sha) {
     const path = CLS.dir + '/' + rel, file = rel.split('/').pop();
     status(t('수업 도면 받는 중… {0}', file));
     const r = await fetch(clsRaw(path, sha || String(Date.now())), { cache: 'no-cache' });
     if (!r.ok) throw new Error(t('수업 도면을 찾을 수 없습니다: {0}', rel));
-    const ext = (file.match(CLS_EXT) || ['.ldr'])[0];
-    await clsOpenFile(new File([await r.blob()], clsClean(file) + ext));
+    const ext = (file.match(CLS_EXT) || ['.ldr'])[0], f = new File([await r.blob()], clsClean(file) + ext);
+    const keep = $('#clsKeep') && $('#clsKeep').checked && window.__cad && (window.__cad.model.parts || []).length > 0;
+    if (keep && await clsOpenKeep(f, clsClean(file))) return;
+    if (!keep) await clsOpenFile(f);
+    await clsApplyField();
     status(t('수업 도면 "{0}"을(를) 열었습니다 · 되돌리려면 ↶', clsClean(file)));
   }
   function clsMsg(s, err) { const e = $('#clsMsg'); e.textContent = s || ''; e.style.color = err ? '#c62828' : ''; }
@@ -163,7 +222,10 @@
     return `https://github.com/${CLS.owner}/${CLS.repo}/upload/${CLS.branch}/${CLS.dir}${g ? '/' + g : ''}`;
   }
   (function clsInit() {
-    $('#btnClass').onclick = () => { $('#clsDlg').hidden = false; clsRequire(() => { $('#clsQ').value = ''; clsLoad(false); setTimeout(() => $('#clsQ').focus(), 0); }); };
+    try { const v = localStorage.getItem('mscad.clsKeep'); if (v != null) $('#clsKeep').checked = v === '1'; } catch (e) { }
+    $('#clsKeep').onchange = () => { try { localStorage.setItem('mscad.clsKeep', $('#clsKeep').checked ? '1' : '0'); } catch (e) { } };
+    const keepRow = () => { const n = window.__cad ? (window.__cad.model.parts || []).length : 0; $('#clsKeepRow').style.display = n ? 'flex' : 'none'; };
+    $('#btnClass').onclick = () => { $('#clsDlg').hidden = false; clsRequire(() => { keepRow(); $('#clsQ').value = ''; clsLoad(false); setTimeout(() => $('#clsQ').focus(), 0); }); };
     $('#clsClose').onclick = () => { $('#clsDlg').hidden = true; };
     $('#clsDlg').addEventListener('click', e => { if (e.target.id === 'clsDlg') $('#clsDlg').hidden = true; });
     $('#clsRefresh').onclick = () => clsLoad(true);
