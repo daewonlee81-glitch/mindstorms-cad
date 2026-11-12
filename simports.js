@@ -124,28 +124,103 @@
   const linked = (A, B) => { for (const a of A) for (const b of B) if (mates(a, b)) return true; return false; };
   // 모터 하나에 붙어 함께 도는 부품들: 로터 축 위에 꽂힌 부품에서 시작해 연결을 따라감.
   // 다른 모터·허브·바퀴·본체에 닿으면(같이 돌 수 없는 구조) 축에 바로 꽂힌 부품만 돌립니다.
-  const attachedTo = (mp, parts, R) => {
-    const rt = ROTOR[mp.file]; if (!rt) return null;
-    const c = add(mv(mp.rot, rt[0]), mp.pos), ax = mv(mp.rot, rt[1]);
-    const cs = new Map(parts.map(p => [p.id, conns(p)]));
-    const fixed = new Set((R.devices || []).map(d => d.id)); // 모터·센서
-    const ix = X.index();
-    for (const p of parts) { const nm = (ix.parts[p.file] || {}).name || ''; if (/Hub|Wheel|Tyre|Tire/i.test(nm)) fixed.add(p.id); }
-    const onAxis = cc => cc.some(k => { if (Math.abs(dot(k.d, ax)) < .97) return false; const v = sub(k.p, c), u = dot(v, ax); return Math.hypot(v[0] - ax[0] * u, v[1] - ax[1] * u, v[2] - ax[2] * u) < 3 && Math.abs(u) < 90; });
-    const seeds = parts.filter(p => p.id !== mp.id && !fixed.has(p.id) && onAxis(cs.get(p.id)));
-    if (!seeds.length) return { c, ax, ids: [] };
-    const set = new Set(seeds.map(p => p.id)), queue = [...seeds]; let bad = false;
-    while (queue.length && !bad) {
-      const p = queue.shift();
-      for (const o of parts) {
-        if (set.has(o.id) || o.id === mp.id) continue;
-        if (!linked(cs.get(p.id), cs.get(o.id))) continue;
-        if (fixed.has(o.id)) { bad = true; break; }
-        set.add(o.id); queue.push(o);
-        if (set.size > 60) { bad = true; break; }
+  // STL 부품은 연결점이 없으므로 모양이 닿는지로 봅니다: STL 정점이 다른 부품의 (부품 좌표) 상자 안에 들어가면 닿음.
+  const T3G = C.THREE;
+  const geo = new Map();
+  const g = p => {
+    let e = geo.get(p.id); if (e) return e;
+    const o = C.objs.get(p.id); e = { box: null, inv: null, pts: null };
+    if (o) {
+      o.updateMatrixWorld(true);
+      const bb = new T3G.Box3(), oi = new T3G.Matrix4().copy(o.matrixWorld).invert();
+      o.traverse(m => { if (m.isMesh && m.geometry) { m.geometry.computeBoundingBox(); bb.union(m.geometry.boundingBox.clone().applyMatrix4(new T3G.Matrix4().multiplyMatrices(oi, m.matrixWorld))); } });
+      e.box = bb.isEmpty() ? null : bb; e.inv = oi;
+      if (/^stl_/.test(p.file)) {
+        // 면 위에 고르게 점을 뿌립니다 (꼭짓점만 보면 넓은 면이 맞닿은 경우를 놓침). 면적에 비례해 약 3000점.
+        const tris = []; let area = 0;
+        o.traverse(m => {
+          if (!m.isMesh || !m.geometry || !m.geometry.attributes.position) return;
+          const a = m.geometry.attributes.position, idx = m.geometry.index, n = idx ? idx.count : a.count;
+          const P = k => new T3G.Vector3(a.getX(k), a.getY(k), a.getZ(k)).applyMatrix4(m.matrixWorld);
+          for (let k = 0; k + 2 < n; k += 3) { const A = P(idx ? idx.getX(k) : k), B = P(idx ? idx.getX(k + 1) : k + 1), Cc = P(idx ? idx.getX(k + 2) : k + 2); const ar = new T3G.Vector3().subVectors(B, A).cross(new T3G.Vector3().subVectors(Cc, A)).length() / 2; tris.push([A, B, Cc, ar]); area += ar; }
+        });
+        const pts = [];
+        for (const [A, B, Cc, ar] of tris) {
+          pts.push(A);
+          const want = Math.min(400, Math.round(3000 * ar / (area || 1))); if (want < 2) continue;
+          const k = Math.ceil(Math.sqrt(want * 2));
+          for (let i = 0; i <= k; i++) for (let j = 0; i + j <= k; j++) { const u = i / k, v = j / k; pts.push(new T3G.Vector3().copy(A).addScaledVector(new T3G.Vector3().subVectors(B, A), u).addScaledVector(new T3G.Vector3().subVectors(Cc, A), v)); }
+        }
+        e.pts = pts;
       }
     }
-    return { c, ax, ids: bad ? seeds.map(p => p.id) : [...set] };
+    geo.set(p.id, e); return e;
+  };
+  const touches = (stl, other, tol = 1.5) => {
+    const a = g(stl), b = g(other); if (!a.pts || !b.box) return false;
+    const box = b.box.clone().expandByScalar(tol), v = new T3G.Vector3(); let n = 0;
+    for (const pt of a.pts) { v.copy(pt).applyMatrix4(b.inv); if (box.containsPoint(v) && ++n >= 3) return true; }
+    return false;
+  };
+  // 로터 축을 둘러싼 STL (모터 허브에 바로 끼운 STL 팔 등)
+  const stlOnRotor = (stl, c, ax) => {
+    const a = g(stl); if (!a.pts) return false;
+    const root = C.root; root.updateMatrixWorld(true);
+    const cw = root.localToWorld(new T3G.Vector3(...c)), aw = new T3G.Vector3(...ax).transformDirection(root.matrixWorld);
+    let n = 0; const v = new T3G.Vector3();
+    for (const pt of a.pts) { v.subVectors(pt, cw); const u = v.dot(aw); if (Math.abs(u) > 70) continue; if (v.addScaledVector(aw, -u).length() < 12 && ++n >= 6) return true; }
+    return false;
+  };
+  const attachedTo = (mp, parts, R) => {
+    const rt = ROTOR[mp.file]; if (!rt) return null;
+    geo.clear();
+    const c = add(mv(mp.rot, rt[0]), mp.pos), ax = mv(mp.rot, rt[1]);
+    const cs = new Map(parts.map(p => [p.id, conns(p)]));
+    const fixed = new Set((R.devices || []).map(d => d.id)); // 모터·센서 (이 모터 몸통 포함)
+    const ix = X.index(), isStl = p => /^stl_/.test(p.file);
+    for (const p of parts) { const nm = (ix.parts[p.file] || {}).name || ''; if (/Hub|Wheel|Tyre|Tire/i.test(nm)) fixed.add(p.id); }
+    const onAxis = cc => cc.some(k => { if (Math.abs(dot(k.d, ax)) < .97) return false; const v = sub(k.p, c), u = dot(v, ax); return Math.hypot(v[0] - ax[0] * u, v[1] - ax[1] * u, v[2] - ax[2] * u) < 3 && Math.abs(u) < 90; });
+    const seeds = parts.filter(p => p.id !== mp.id && !fixed.has(p.id) && !isStl(p) && onAxis(cs.get(p.id)));
+    // 1) 레고 부품: 연결점을 따라감
+    const flood = (start, set) => {
+      const queue = [...start]; let bad = false;
+      while (queue.length && !bad) {
+        const p = queue.shift();
+        for (const o of parts) {
+          if (set.has(o.id) || o.id === mp.id || isStl(o)) continue;
+          if (!linked(cs.get(p.id), cs.get(o.id))) continue;
+          if (fixed.has(o.id)) { bad = true; break; }
+          set.add(o.id); queue.push(o);
+          if (set.size > 80) { bad = true; break; }
+        }
+      }
+      return bad;
+    };
+    let set = new Set(seeds.map(p => p.id));
+    if (flood(seeds, set)) set = new Set(seeds.map(p => p.id));
+    // 2) STL 부품: 로터 축을 감싸거나, 함께 도는 부품에 닿고 본체(모터·허브·바퀴)에는 닿지 않으면 같이 돎.
+    //    STL 에 꽂힌 레고 부품(본체 쪽과 연결점이 없는 것)도 따라 돎.
+    const stls = parts.filter(isStl), byId = new Map(parts.map(p => [p.id, p]));
+    const fixedParts = [...fixed].map(id => byId.get(id)).filter(Boolean);
+    for (let it = 0, changed = true; changed && it < 12; it++) {
+      changed = false;
+      for (const s of stls) {
+        if (set.has(s.id)) continue;
+        const seed = stlOnRotor(s, c, ax);
+        const near = seed || [...set].some(id => touches(s, byId.get(id)));
+        if (!near) continue;
+        if (!seed && fixedParts.some(f => touches(s, f))) continue;
+        set.add(s.id); changed = true;
+      }
+      for (const o of parts) {
+        if (set.has(o.id) || o.id === mp.id || fixed.has(o.id) || isStl(o)) continue;
+        if (!stls.some(s => set.has(s.id) && touches(s, o))) continue;
+        // 이 부품과 연결점으로 이어진 무리가 본체에 닿으면(본체에 고정됨) 넣지 않음
+        const add2 = new Set(set); add2.add(o.id);
+        if (!flood([o], add2)) { set = add2; changed = true; }
+      }
+    }
+    return { c, ax, ids: [...set] };
   };
   // 로봇을 새로 만들 때마다: 바퀴가 아닌 모터마다 축 그룹을 만들어 붙은 부품 복제본을 옮겨 넣음
   let rigFor = null, rigs = [];
