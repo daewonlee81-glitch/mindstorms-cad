@@ -8,6 +8,7 @@
   5. window.__cad.ext — 선택 부품·되돌리기·부품 추가·팔레트 다시 그리기 등
   6. 시뮬레이터 로봇의 장치→포트 기록(Q.devices)과 ext.simRebuild / robot / simRunning
   7. 로봇 부품 복제본 Q.clones[부품 id]와 ext.motors() (모터 각도) — 추가 모터에 붙은 부품 돌리기
+  8. 허스키렌즈: 센서 종류 husky, 포트 표 값(window.__husky.text), ext.matPx(x,z) 매트 색
 사용: python3 patch_cadx.py app.js
 """
 import sys
@@ -37,6 +38,16 @@ PATCHES = [
      'else l.add(U);(c.clones=c.clones||{})[b.id]=U}c.fromCad=!0'),
     ('get simRunning(){return!!q.running},',
      'get simRunning(){return!!q.running},motors:()=>On,'),
+    # 8. 허스키렌즈 (huskylens.js): 부품 이름으로 센서 종류 'husky' 인식, 포트 표에 값 표시, 매트 색 읽기
+    ('[/Force Sensor|Touch Sensor/i,"force"]];',
+     '[/Force Sensor|Touch Sensor/i,"force"],[/HuskyLens/i,"husky"]];'),
+    ('force:T("\\uD798\\uC13C\\uC11C")}[i.type]',
+     'force:T("\\uD798\\uC13C\\uC11C"),husky:"HuskyLens"}[i.type]'),
+    ('i?.type==="force"&&(o=Ec||vt-ks<.2?"\\u25CF":"\\u25CB"),',
+     'i?.type==="force"&&(o=Ec||vt-ks<.2?"\\u25CF":"\\u25CB"),i?.type==="husky"&&(o=window.__husky?ce(window.__husky.text(t)):""),'),
+    ('get simRunning(){return!!q.running},motors:()=>On,',
+     'get simRunning(){return!!q.running},motors:()=>On,matPx:(x,z)=>{let p=Math.round(x+ut/2),u=Math.round(z+yt/2);if(!Zi||p<0||u<0||p>=ut||u>=yt)return null;let h=(u*ut+p)*4;return[Zi[h],Zi[h+1],Zi[h+2]]},',
+     'matPx:'),
 ]
 
 
