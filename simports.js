@@ -14,6 +14,7 @@
     '컬러센서': ['Colour sensor', 'カラーセンサー', '颜色传感器', 'Sensor de color'],
     '거리센서': ['Distance sensor', '距離センサー', '距离传感器', 'Sensor de distancia'],
     '힘센서': ['Force sensor', 'フォースセンサー', '力传感器', 'Sensor de fuerza'],
+    '허스키렌즈': ['HuskyLens', 'HuskyLens', 'HuskyLens', 'HuskyLens'],
     '왼쪽 바퀴': ['left wheel', '左の車輪', '左轮', 'rueda izquierda'],
     '오른쪽 바퀴': ['right wheel', '右の車輪', '右轮', 'rueda derecha'],
     '앞': ['front', '前', '前', 'delante'], '뒤': ['back', '後ろ', '后', 'detrás'],
@@ -25,8 +26,8 @@
   };
   const t = (ko, ...a) => { const i = LIX[(document.documentElement.lang || 'ko').slice(0, 2)]; let s = (i != null && TR[ko] && TR[ko][i]) || ko; a.forEach((v, k) => { s = s.replace('{' + k + '}', v); }); return s; };
   const PORTS = ['A', 'B', 'C', 'D', 'E', 'F'];
-  const KIND = { motor: '모터', color: '컬러센서', distance: '거리센서', force: '힘센서' };
-  const ICON = { motor: '⚙', color: '◉', distance: '◎', force: '◼' };
+  const KIND = { motor: '모터', color: '컬러센서', distance: '거리센서', force: '힘센서', husky: '허스키렌즈' };
+  const ICON = { motor: '⚙', color: '◉', distance: '◎', force: '◼', husky: '🔍' };
 
   const css = document.createElement('style');
   css.textContent = `#simPortMap{display:flex;flex-direction:column;gap:4px;margin-top:2px}
@@ -247,6 +248,13 @@
     C.model.sim = { ...sim, left: L.port, right: Rr.port };
     return true;
   };
+  // 모터 출력 면 쪽(부품 몸통 가운데에서 로터 쪽)을 +로: 그 면을 바라볼 때 시계 방향 = + (SPIKE 규칙)
+  const drvAxis = (mp, at) => {
+    let n = at.ax; const mo = C.objs.get(mp.id);
+    if (mo) { const bb = new T3.Box3(); mo.traverse(o => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); const b = o.geometry.boundingBox.clone(); const m = new T3.Matrix4(); let q = o; const chain = []; while (q && q !== mo) { chain.push(q); q = q.parent; } chain.reverse().forEach(x => { x.updateMatrix && !x.matrixAutoUpdate || x.updateMatrix(); m.multiply(x.matrix); }); bb.union(b.applyMatrix4(m)); } });
+      if (!bb.isEmpty()) { const ctr = bb.getCenter(new T3.Vector3()), body = add(mv(mp.rot, [ctr.x, ctr.y, ctr.z]), mp.pos); if (dot(sub(at.c, body), n) < 0) n = n.map(v => -v); } }
+    return n;
+  };
   const buildRig = R => {
     rigFor = R; rigs = [];
     if (!R || !R.fromCad || !R.clones || !R.devices) return;
@@ -255,12 +263,25 @@
     for (const d of R.devices) {
       if (d.kind !== 'motor' || d.port === R.left || d.port === R.right || drivesOf.includes(d.port)) continue;
       const mp = parts.find(p => p.id === d.id); if (!mp) continue;
-      const at = attachedTo(mp, parts, R); if (!at || !at.ids.length) continue;
+      // 기어로 이어진 축까지 (cadmech.js): 축마다 따로 돌림. 안 되면 예전처럼 로터에 붙은 부품만
+      const ixx = X.index(), wheelIds = parts.filter(p => /Hub|Wheel|Tyre|Tire/i.test((ixx.parts[p.file] || {}).name || '') && !/^Electric/i.test((ixx.parts[p.file] || {}).name || '')).map(p => p.id);
+      const ms = window.__mech && window.__mech.solve(mp.id, { fixed: wheelIds });
+      const at = attachedTo(mp, parts, R); if (!at) continue;
+      if (ms && ms.ok && ms.groups.some(G => G.ids.length)) {
+        const n0 = drvAxis(mp, at), sg = dot(n0, ms.a) < 0 ? -1 : 1;
+        for (const G of ms.groups) {
+          const any = G.ids.map(id => R.clones[id]).find(Boolean), host = any && any.parent; if (!host) continue;
+          const pivot = new T3.Group(), inner = new T3.Group();
+          pivot.position.set(...G.c); inner.position.set(-G.c[0], -G.c[1], -G.c[2]);
+          pivot.add(inner); host.add(pivot);
+          for (const id of G.ids) { const u = R.clones[id]; if (u && u.parent === host) inner.add(u); }
+          rigs.push({ port: d.port, pivot, axis: new T3.Vector3(...G.a).normalize(), k: G.k * sg, n: G.ids.length });
+        }
+        continue;
+      }
+      if (!at.ids.length) continue;
       const any = R.clones[at.ids[0]]; const host = any && any.parent; if (!host) continue;
-      // 모터 출력 면 쪽(부품 몸통 가운데에서 로터 쪽)을 +로: 그 면을 바라볼 때 시계 방향 = + (SPIKE 규칙)
-      let n = at.ax; const mo = C.objs.get(mp.id);
-      if (mo) { const bb = new T3.Box3(); mo.traverse(o => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); const b = o.geometry.boundingBox.clone(); const m = new T3.Matrix4(); let q = o; const chain = []; while (q && q !== mo) { chain.push(q); q = q.parent; } chain.reverse().forEach(x => { x.updateMatrix && !x.matrixAutoUpdate || x.updateMatrix(); m.multiply(x.matrix); }); bb.union(b.applyMatrix4(m)); } });
-        if (!bb.isEmpty()) { const ctr = bb.getCenter(new T3.Vector3()), body = add(mv(mp.rot, [ctr.x, ctr.y, ctr.z]), mp.pos); if (dot(sub(at.c, body), n) < 0) n = n.map(v => -v); } }
+      const n = drvAxis(mp, at);
       const pivot = new T3.Group(), inner = new T3.Group();
       pivot.position.set(...at.c); inner.position.set(-at.c[0], -at.c[1], -at.c[2]);
       pivot.add(inner); host.add(pivot);
@@ -271,11 +292,11 @@
   const tick = () => {
     const R = X.robot;
     if (R !== rigFor) buildRig(R);
-    if (rigs.length) { const M = X.motors ? X.motors() : {}; for (const r of rigs) { const deg = (M[r.port] && M[r.port].pos) || 0; r.pivot.quaternion.setFromAxisAngle(r.axis, -deg * Math.PI / 180); } }
+    if (rigs.length) { const M = X.motors ? X.motors() : {}; for (const r of rigs) { const deg = (M[r.port] && M[r.port].pos) || 0; r.pivot.quaternion.setFromAxisAngle(r.axis, -deg * (r.k == null ? 1 : r.k) * Math.PI / 180); } }
     requestAnimationFrame(tick);
   };
   if ('motors' in X) requestAnimationFrame(tick);
-  window.__simRigs = () => rigs.map(r => ({ port: r.port, parts: r.n }));
+  window.__simRigs = () => rigs.map(r => ({ port: r.port, parts: r.n, k: r.k == null ? 1 : r.k }));
 
   setInterval(() => { const sim = document.getElementById('sim'); if (sim && sim.hidden) return; render(false); }, 600);
   new MutationObserver(() => render(true)).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
