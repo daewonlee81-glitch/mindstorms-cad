@@ -7,6 +7,7 @@
   4. 처음 시작할 때 window.__cadxReady (STL 부품 불러오기) 를 기다린 뒤 자동 저장 모델을 엶
   5. window.__cad.ext — 선택 부품·되돌리기·부품 추가·팔레트 다시 그리기 등
   6. 시뮬레이터 로봇의 장치→포트 기록(Q.devices)과 ext.simRebuild / robot / simRunning
+  7. 로봇 부품 복제본 Q.clones[부품 id]와 ext.motors() (모터 각도) — 추가 모터에 붙은 부품 돌리기
 사용: python3 patch_cadx.py app.js
 """
 import sys
@@ -31,6 +32,11 @@ PATCHES = [
     ('palette:()=>{Lx(),nc()},',
      'palette:()=>{Lx(),nc()},simRebuild:()=>{q.on&&ap()},get robot(){return Q},get simRunning(){return!!q.running},',
      'simRebuild:'),
+    # 7. 추가 모터(팔·집게)가 돌 때 붙은 부품도 돌도록: 로봇 복제본(부품별)과 모터 상태(On)를 내보냄
+    ('else l.add(U)}c.fromCad=!0',
+     'else l.add(U);(c.clones=c.clones||{})[b.id]=U}c.fromCad=!0'),
+    ('get simRunning(){return!!q.running},',
+     'get simRunning(){return!!q.running},motors:()=>On,'),
 ]
 
 
