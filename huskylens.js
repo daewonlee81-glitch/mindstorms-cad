@@ -121,10 +121,16 @@ ${[-40, -20, 0, 20, 40].map(x => `1 0 ${x} 10.05 0 6 0 0 0 1 0 0 0 6 4-4disc.dat
       const r = o.shape === 'ball' ? o.r : (o.cr || o.r || Math.max(o.w || 0, o.d || 0) / 2); if (!r) continue;
       const dx = O.x - o.x, dz = O.z - o.z, a = D.x * D.x + D.z * D.z, b = 2 * (dx * D.x + dz * D.z), cc = dx * dx + dz * dz - r * r, disc = b * b - 4 * a * cc;
       if (disc < 0 || a < 1e-9) continue;
-      const tt = (-b - Math.sqrt(disc)) / (2 * a); if (tt <= 1 || tt >= best) continue;
+      const tt = (-b - Math.sqrt(disc)) / (2 * a); if (tt >= best) continue;
       const y = O.y + D.y * tt, hgt = o.shape === 'ball' ? 2 * o.r : (o.hgt || 0), base = (o.y0 ?? hgt / 2) - hgt / 2;
-      if (y < base || y > base + hgt) continue;
-      best = tt; col = propColor(o, y);
+      if (tt > 1 && y >= base && y <= base + hgt) { best = tt; col = propColor(o, y); continue; }
+      // 윗면·아랫면 (판처럼 납작한 물체는 위에서 보면 윗면이 대부분)
+      if (o.shape === 'ball' || Math.abs(D.y) < 1e-6) continue;
+      const yc = D.y < 0 ? base + hgt : base, tc = (yc - O.y) / D.y;
+      if (tc <= 1 || tc >= best) continue;
+      const px = O.x + D.x * tc - o.x, pz = O.z + D.z * tc - o.z;
+      if (px * px + pz * pz > r * r) continue;
+      best = tc; col = propColor(o, D.y < 0 ? base + hgt : base);
     }
     // 바닥(매트)
     if (D.y < -1e-6) { const tt = -O.y / D.y; if (tt > 0 && tt < best) { const px = X.matPx ? X.matPx(O.x + D.x * tt, O.z + D.z * tt) : null; if (px) return { c: px, ground: true }; } }
@@ -159,14 +165,23 @@ ${[-40, -20, 0, 20, 40].map(x => `1 0 ${x} 10.05 0 6 0 0 0 1 0 0 0 6 4-4disc.dat
       }
       if (first && last && first[0] - last[0] >= 2) { out.id = 1; out.v = [Math.round((first[1] + .5) * 5), Math.round((last[1] + .5) * 5), Math.round((last[0] + .5) * 5)]; out.line = [first, last]; }
     } else {
-      const ids = c.ids || [], boxes = ids.map(() => ({ n: 0, x0: 1e9, x1: -1, y0: 1e9, y1: -1 }));
+      // 학습한 색마다 이어진 덩어리(물체 하나)로 나눠, 가장 큰 덩어리 하나를 보냄 (허스키렌즈 → 브리지와 같음)
+      const ids = c.ids || [], lab = new Int8Array(W * H).fill(-1);
       for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
         const k = (j * W + i) * 4, nm = hueName(img[k], img[k + 1], img[k + 2]); if (!nm) continue;
-        const q = ids.indexOf(nm); if (q < 0) continue;
-        const b = boxes[q]; b.n++; b.x0 = Math.min(b.x0, i); b.x1 = Math.max(b.x1, i); b.y0 = Math.min(b.y0, j); b.y1 = Math.max(b.y1, j);
+        const q = ids.indexOf(nm); if (q >= 0) lab[j * W + i] = q;
       }
-      let bi = -1; boxes.forEach((b, q) => { if (b.n >= 3 && (bi < 0 || b.n > boxes[bi].n)) bi = q; });
-      if (bi >= 0) { const b = boxes[bi]; out.id = bi + 1; out.v = [Math.round((b.x0 + b.x1 + 1) / 2 * 5), Math.round((b.y0 + b.y1 + 1) / 2 * 5), Math.round((b.x1 - b.x0 + 1) * 5)]; out.box = b; }
+      const seen = new Uint8Array(W * H); let best = null;
+      for (let s0 = 0; s0 < W * H; s0++) {
+        if (lab[s0] < 0 || seen[s0]) continue;
+        const q = lab[s0], b = { q, n: 0, x0: 1e9, x1: -1, y0: 1e9, y1: -1 }, st = [s0]; seen[s0] = 1;
+        while (st.length) {
+          const s1 = st.pop(), i = s1 % W, j = (s1 - i) / W; b.n++; b.x0 = Math.min(b.x0, i); b.x1 = Math.max(b.x1, i); b.y0 = Math.min(b.y0, j); b.y1 = Math.max(b.y1, j);
+          for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= W || jj >= H) continue; const s2 = jj * W + ii; if (!seen[s2] && lab[s2] === q) { seen[s2] = 1; st.push(s2); } }
+        }
+        if (b.n >= 3 && (!best || b.n > best.n)) best = b;
+      }
+      if (best) { const b = best; out.id = b.q + 1; out.v = [Math.round((b.x0 + b.x1 + 1) / 2 * 5), Math.round((b.y0 + b.y1 + 1) / 2 * 5), Math.round((b.x1 - b.x0 + 1) * 5)]; out.box = b; }
     }
     cache[port] = out; return out;
   };

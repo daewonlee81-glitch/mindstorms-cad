@@ -101,4 +101,63 @@
     }
   };
   setInterval(() => { skin(); grey(); }, 250);
+
+  // ───────── 플리퍼로 판 뒤집기 ─────────
+  //   시뮬레이터의 팔·플리퍼 모터는 모습만 돌고 물리 관절이 없으므로, 이 경기장에서는 규칙으로 흉내 냅니다:
+  //   플리퍼(바퀴가 아닌 모터에 붙은 부품)가 바닥 가까이(높이 15mm 아래) 내려가 있을 때 그 밑·앞에 닿아 있던 판이,
+  //   플리퍼가 1초 안에 45mm 위로 올라가면 뒤집힙니다 (위·아래 색이 바뀌고 살짝 튀어 오름).
+  const X = window.__cad && window.__cad.ext;
+  const flip = o => {
+    [o.top, o.bottom] = [o.bottom, o.top];
+    const ch = o.mesh && o.mesh.children;
+    if (ch && ch.length >= 2 && ch[0].material && ch[1].material) { const c0 = ch[0].material.color.getHex(); ch[0].material.color.setHex(ch[1].material.color.getHex()); ch[1].material.color.setHex(c0); }
+    o.flips = (o.flips || 0) + 1;
+    if (o.body) { try { o.body.applyImpulse({ x: 0, y: o.mass * 1.0, z: 0 }, true); o.body.applyTorqueImpulse({ x: o.mass * 0.004, y: 0, z: 0 }, true); } catch (e) {} }
+  };
+  let rigFor = null, arms = [];
+  const armsOf = R => {
+    const out = [], P = window.__cad.model.parts;
+    for (const d of R.devices || []) {
+      if (d.kind !== 'motor' || d.port === R.left || d.port === R.right) continue;
+      let ids = [];
+      try { const ms = window.__mech && window.__mech.solve(d.id); if (ms && ms.ok) ids = ms.groups.flatMap(G => G.ids); } catch (e) {}
+      const objs = ids.map(id => R.clones && R.clones[id]).filter(Boolean);
+      if (objs.length) out.push({ port: d.port, objs, low: -1, cand: new Map() });
+    }
+    return out;
+  };
+  const tickFlip = () => {
+    requestAnimationFrame(tickFlip);
+    if (!X || U.mat() !== mat) return;
+    const R = X.robot, T3 = window.__cad.THREE; if (!R || !R.root || !T3) return;
+    if (R !== rigFor) { rigFor = R; arms = armsOf(R); }
+    if (!arms.length) return;
+    const now = U.time(); R.root.updateMatrixWorld(true);
+    const inv = new T3.Matrix4().copy(R.root.matrixWorld).invert(), v = new T3.Vector3();
+    for (const A of arms) {
+      // 플리퍼의 가장 낮은 높이와, 바닥 가까이 있는 부분의 로봇 기준 앞뒤·좌우 범위
+      let miny = 1e9; const foot = new T3.Box3();
+      for (const o of A.objs) {
+        const bb = new T3.Box3().setFromObject(o); if (bb.isEmpty()) continue;
+        miny = Math.min(miny, bb.min.y);
+        if (bb.min.y < 15) foot.union(bb.clone().applyMatrix4(inv));
+      }
+      if (miny < 15 && !foot.isEmpty()) {
+        A.low = now;
+        for (const o of U.props()) {
+          if (o.kind !== 'disc' || o.fallen) continue;
+          v.set(o.x, 0, o.z).applyMatrix4(inv);
+          // 앞쪽은 판 반지름만큼 (플리퍼 끝에 걸쳐 밀리는 판), 옆은 판이 절반 넘게 플리퍼 위에 있을 때만
+          const r0 = o.r || 60, mf = r0 + 15, ms = r0 * 0.4;
+          if (v.x > foot.min.x - ms && v.x < foot.max.x + ms && v.z > foot.min.z - mf && v.z < foot.max.z + mf) A.cand.set(o, now);
+        }
+      } else if (A.low >= 0 && miny > 45) {
+        if (now - A.low < 1.0) for (const [o, t] of A.cand) if (A.low - t < 0.3) flip(o);
+        A.low = -1; A.cand.clear();
+      }
+      if (A.low >= 0 && now - A.low > 1.0) { A.low = -1; A.cand.clear(); }
+    }
+  };
+  requestAnimationFrame(tickFlip);
+  window.__othelloAI = { flip, arms: () => arms };
 })();
