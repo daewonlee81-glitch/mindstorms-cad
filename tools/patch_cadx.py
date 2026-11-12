@@ -6,6 +6,7 @@
   3. .ldr 을 만들 때 window.__cadx.onSaveText(text, model) 로 덧붙임 (STL 부품 넣기)
   4. 처음 시작할 때 window.__cadxReady (STL 부품 불러오기) 를 기다린 뒤 자동 저장 모델을 엶
   5. window.__cad.ext — 선택 부품·되돌리기·부품 추가·팔레트 다시 그리기 등
+  6. 시뮬레이터 로봇의 장치→포트 기록(Q.devices)과 ext.simRebuild / robot / simRunning
 사용: python3 patch_cadx.py app.js
 """
 import sys
@@ -20,14 +21,23 @@ PATCHES = [
     ('await SC(),P("#loading").hidden=!0',
      'await SC(),window.__cadxReady&&await window.__cadxReady.catch(()=>{}),P("#loading").hidden=!0'),
     ('select:n=>{qn=n,Ui(),En()}};',
-     'select:n=>{qn=n,Ui(),En()},ext:{get sel(){return hi()},push:Yn,apply:n=>{xc(n),Ui(),En(),dn()},add:Cg,reload:Qh,palette:()=>{Lx(),nc()},bundle:()=>Oh,index:()=>un,loader:po,status:cn,T,get step(){return gt}}};'),
+     'select:n=>{qn=n,Ui(),En()},ext:{get sel(){return hi()},push:Yn,apply:n=>{xc(n),Ui(),En(),dn()},add:Cg,reload:Qh,palette:()=>{Lx(),nc()},bundle:()=>Oh,index:()=>un,loader:po,status:cn,T,get step(){return gt}}};',
+     'ext:{get sel(){return hi()}'),  # 이미 넣었는지 확인하는 글자 (6번이 이 줄을 바꿔도 다시 넣지 않게)
+    # 6. 시뮬레이터 포트 설정 (simports.js): 로봇을 만들 때 어느 부품이 어느 포트인지 기록 + 다시 만들기
+    ('c.autoLeft=M[0]?.port,',
+     'c.devices=M.map(b=>({id:b.p.id,port:b.port,kind:"motor"})),c.autoLeft=M[0]?.port,'),
+    ('c.ports[b.port]={type:b.kind},c.sensors.push(',
+     'c.ports[b.port]={type:b.kind},(c.devices=c.devices||[]).push({id:b.p.id,port:b.port,kind:b.kind}),c.sensors.push('),
+    ('palette:()=>{Lx(),nc()},',
+     'palette:()=>{Lx(),nc()},simRebuild:()=>{q.on&&ap()},get robot(){return Q},get simRunning(){return!!q.running},',
+     'simRebuild:'),
 ]
 
 
 def main(path):
     s = open(path, encoding='utf-8').read()
-    for a, b in PATCHES:
-        if b in s:
+    for a, b, *mark in PATCHES:
+        if b in s or (mark and mark[0] in s):
             print('skip (already):', a[:50]); continue
         n = s.count(a)
         if n != 1:
