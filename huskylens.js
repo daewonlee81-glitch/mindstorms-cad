@@ -106,12 +106,14 @@ ${[-40, -20, 0, 20, 40].map(x => `1 0 ${x} 10.05 0 6 0 0 0 1 0 0 0 6 4-4disc.dat
     return cams;
   };
   // 로봇 좌표 → 세계 좌표 (물리엔진이 아니면 현재 경기장의 로봇 위치 Te 로 계산 — 학습 중 여러 경기장에서도 맞음)
-  const toWorld = (R, v, dir) => {
-    if (U.phys && U.phys()) { R.root.updateMatrixWorld(true); return dir ? v.clone().transformDirection(R.root.matrixWorld) : R.root.localToWorld(v.clone()); }
-    const P = U.pose(), c = Math.cos(P.th), s = Math.sin(P.th);
+  const toWorld = (R, v, dir, P0) => {
+    if (!P0 && U.phys && U.phys()) { R.root.updateMatrixWorld(true); return dir ? v.clone().transformDirection(R.root.matrixWorld) : R.root.localToWorld(v.clone()); }
+    const P = P0 || U.pose(), c = Math.cos(P.th), s = Math.sin(P.th);
     const x = v.x * c + v.z * s, z = -v.x * s + v.z * c;
     return dir ? new T3.Vector3(x, v.y, z) : new T3.Vector3(P.x + x, v.y, P.z + z);
   };
+  // 세운 블록처럼 옆면 색이 둘인 물체(sides): 블록 기준 왼쪽(−x) 절반·오른쪽(+x) 절반
+  const sideColor = (o, hx, hz) => { const c = Math.cos(o.th || 0), s = Math.sin(o.th || 0), lx = (hx - o.x) * c - (hz - o.z) * s; const k = o.sides[lx < 0 ? 0 : 1]; return [(k >> 16) & 255, (k >> 8) & 255, k & 255]; };
   const propColor = (o, y) => { const base = (o.y0 ?? (o.hgt || 0) / 2) - (o.hgt || 0) / 2; const c = o.top != null ? (y - base > (o.hgt || 0) / 2 ? o.top : o.bottom) : o.color; return [(c >> 16) & 255, (c >> 8) & 255, c & 255]; };
   const shoot = (O, D) => {
     // 물체(세운 원기둥·공으로 봄)
@@ -123,25 +125,27 @@ ${[-40, -20, 0, 20, 40].map(x => `1 0 ${x} 10.05 0 6 0 0 0 1 0 0 0 6 4-4disc.dat
       if (disc < 0 || a < 1e-9) continue;
       const tt = (-b - Math.sqrt(disc)) / (2 * a); if (tt >= best) continue;
       const y = O.y + D.y * tt, hgt = o.shape === 'ball' ? 2 * o.r : (o.hgt || 0), base = (o.y0 ?? hgt / 2) - hgt / 2;
-      if (tt > 1 && y >= base && y <= base + hgt) { best = tt; col = propColor(o, y); continue; }
+      if (tt > 1 && y >= base && y <= base + hgt) { best = tt; col = o.sides ? sideColor(o, O.x + D.x * tt, O.z + D.z * tt) : propColor(o, y); continue; }
       // 윗면·아랫면 (판처럼 납작한 물체는 위에서 보면 윗면이 대부분)
       if (o.shape === 'ball' || Math.abs(D.y) < 1e-6) continue;
       const yc = D.y < 0 ? base + hgt : base, tc = (yc - O.y) / D.y;
       if (tc <= 1 || tc >= best) continue;
       const px = O.x + D.x * tc - o.x, pz = O.z + D.z * tc - o.z;
       if (px * px + pz * pz > r * r) continue;
-      best = tc; col = propColor(o, D.y < 0 ? base + hgt : base);
+      best = tc; col = o.sides ? sideColor(o, O.x + D.x * tc, O.z + D.z * tc) : propColor(o, D.y < 0 ? base + hgt : base);
     }
     // 바닥(매트)
     if (D.y < -1e-6) { const tt = -O.y / D.y; if (tt > 0 && tt < best) { const px = X.matPx ? X.matPx(O.x + D.x * tt, O.z + D.z * tt) : null; if (px) return { c: px, ground: true }; } }
     return col ? { c: col, ground: false } : { c: [150, 150, 150], ground: false, none: true };
   };
   const cache = {};
-  const render = port => {
+  // opt: { pose, cfg, tag } — 다른 로봇(예: 오셀로 AI 상대 로봇)의 위치·학습 색으로 찍을 때
+  const render = (port, opt) => {
     const R = X.robot, cam = camsOf(R)[port]; if (!cam) return null;
-    const P = U.pose(), key = [U.time(), P.x, P.z, P.th, (U.props() || []).length, JSON.stringify(cfg())].join('|');
-    if (cache[port] && cache[port].key === key) return cache[port];
-    const O = toWorld(R, cam.o), F = toWorld(R, cam.d, true).normalize();
+    const P = (opt && opt.pose) || U.pose(), CF = (opt && opt.cfg) || cfg(), ck = port + ((opt && opt.tag) || '');
+    const key = [U.time(), P.x, P.z, P.th, (U.props() || []).length, JSON.stringify(CF)].join('|');
+    if (cache[ck] && cache[ck].key === key) return cache[ck];
+    const O = toWorld(R, cam.o, false, opt && opt.pose), F = toWorld(R, cam.d, true, opt && opt.pose).normalize();
     const up0 = Math.abs(F.y) > .95 ? new T3.Vector3(0, 0, 1) : new T3.Vector3(0, 1, 0);
     const right = new T3.Vector3().crossVectors(F, up0).normalize(), up = new T3.Vector3().crossVectors(right, F).normalize();
     const th = Math.tan(HF / 2), tv = Math.tan(VF / 2), img = new Uint8ClampedArray(W * H * 4), grd = new Uint8Array(W * H);
@@ -151,7 +155,7 @@ ${[-40, -20, 0, 20, 40].map(x => `1 0 ${x} 10.05 0 6 0 0 0 1 0 0 0 6 4-4disc.dat
       D.copy(F).addScaledVector(right, nx * th).addScaledVector(up, ny * tv).normalize();
       const h = shoot(O, D), k = (j * W + i) * 4; img[k] = h.c[0]; img[k + 1] = h.c[1]; img[k + 2] = h.c[2]; img[k + 3] = 255; grd[j * W + i] = h.ground ? 1 : 0;
     }
-    const c = cfg(), out = { key, img, algo: c.algo, id: 0, v: [0, 0, 0] };
+    const c = CF, out = { key, img, algo: c.algo, id: 0, v: [0, 0, 0] };
     if (c.algo === 'line') {
       // 아래쪽에서 시작해 위로 이어지는 검은 선만 따라감 (멀리 있는 다른 선 조각은 무시)
       const runs = j => { const out = []; let st = -1; for (let i = 0; i <= W; i++) { const k = (j * W + i) * 4, dark = i < W && grd[j * W + i] && .299 * img[k] + .587 * img[k + 1] + .114 * img[k + 2] < 80; if (dark && st < 0) st = i; if (!dark && st >= 0) { out.push([st, i - 1]); st = -1; } } return out.filter(r => r[1] - r[0] < W * .6); };
@@ -183,7 +187,7 @@ ${[-40, -20, 0, 20, 40].map(x => `1 0 ${x} 10.05 0 6 0 0 0 1 0 0 0 6 4-4disc.dat
       }
       if (best) { const b = best; out.id = b.q + 1; out.v = [Math.round((b.x0 + b.x1 + 1) / 2 * 5), Math.round((b.y0 + b.y1 + 1) / 2 * 5), Math.round((b.x1 - b.x0 + 1) * 5)]; out.box = b; }
     }
-    cache[port] = out; return out;
+    cache[ck] = out; return out;
   };
 
   // ───────── 3. 블록 → 시뮬레이터 API (로보메이커스 rm_husky 와 같은 값) ─────────
@@ -214,6 +218,7 @@ ${[-40, -20, 0, 20, 40].map(x => `1 0 ${x} 10.05 0 6 0 0 0 1 0 0 0 6 4-4disc.dat
 
   // 포트 표(시뮬레이터 오른쪽)에 보이는 값
   window.__husky = {
+    renderAt: (port, pose, cf, tag) => render(port, { pose, cfg: cf, tag: tag || ':opp' }),
     render,
     text: port => { const r = render(port); if (!r) return ''; if (!r.id) return t('안 보임'); return r.algo === 'line' ? `${t('선')} ${r.v[0]}→${r.v[1]}` : `ID${r.id} · ${r.v[0]},${r.v[1]} · W${r.v[2]}`; },
   };

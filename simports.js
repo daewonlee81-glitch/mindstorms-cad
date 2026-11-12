@@ -297,6 +297,7 @@
   };
   if ('motors' in X) requestAnimationFrame(tick);
   window.__simRigs = () => rigs.map(r => ({ port: r.port, parts: r.n, k: r.k == null ? 1 : r.k }));
+  window.__simRigObjs = () => rigs; // { port, pivot, axis, k } — 다른 스크립트(오셀로 AI 상대 로봇)가 같은 모양으로 팔을 돌릴 때
 
   setInterval(() => { const sim = document.getElementById('sim'); if (sim && sim.hidden) return; render(false); }, 600);
   new MutationObserver(() => render(true)).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
