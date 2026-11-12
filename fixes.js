@@ -13,6 +13,13 @@
   for (const ev of ['pointermove', 'pointerdown', 'keydown', 'blur']) window.addEventListener(ev, e => { if (ev === 'keydown' && e.key !== 'Escape' && !hint.hidden && Date.now() - lastOver < 400) return; if (!hint.hidden) hide(); }, true);
   document.addEventListener('visibilitychange', hide);
 })();
+// · 마우스 가운데 버튼: 캐드·시뮬레이터 화면에서 누른 채 끌면 화면 이동 (app.js 시점 조작 MIDDLE = PAN).
+//   브라우저의 가운데 버튼 자동 스크롤이 끼어들지 않도록 3D 화면 위에서는 기본 동작을 막습니다.
+(() => {
+  'use strict';
+  const on3D = e => e.button === 1 && e.target && e.target.tagName === 'CANVAS';
+  for (const ev of ['mousedown', 'auxclick']) window.addEventListener(ev, e => { if (on3D(e)) e.preventDefault(); }, true);
+})();
 // 첫 로딩이 모두 끝나면 "로딩이 끝났습니다" 팝업을 한 번 띄웁니다 (5초 뒤 저절로 닫힘).
 (() => {
   'use strict';

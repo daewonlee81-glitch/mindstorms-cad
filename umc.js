@@ -3,7 +3,8 @@
 //   · 경기장을 고를 때마다, 그리고 점수판의 "새 배치" 버튼을 누를 때마다 배치가 무작위로 바뀝니다.
 //   · 점수판에 과제·실시간 자동 채점·남은 시간(런당 2분)을 보여 줍니다.
 //   · app.js 에는 window.__umc 훅 한 곳만 들어 있습니다. app.js 를 다시 빌드하면 이 훅을 다시 넣어야 합니다:
-//       window.__umc={mats:uo,api:Wn,T:T,esc:ce,i18n:pr,pose:()=>Te,props:()=>Xe,time:()=>vt,hub:()=>We,sim:()=>q,robot:()=>Q,mat:()=>Nt,cam:()=>wi,ctl:()=>Mi};
+//       window.__umc={mats:uo,api:Wn,T:T,esc:ce,i18n:pr,pose:()=>Te,props:()=>Xe,time:()=>vt,hub:()=>We,sim:()=>q,robot:()=>Q,mat:()=>Nt,cam:()=>wi,ctl:()=>Mi,phys:()=>Ct};
+//     (Ct=물리 세계 — rv()의 물체 몸체 만들기를 Ct.addProp(u)로 꺼내고, held 물체(디스펜서 안 사료)는 건너뛰도록 고쳐 둠)
 //     (uo=경기장 표, Wn=시뮬레이터 API, pr=번역 표, Te=로봇 위치, Xe=물체, vt=시뮬레이션 시간, We=허브 화면, q=시뮬레이터 상태, Q=로봇, Nt=현재 경기장)
 //   · 규정 기준: UMC 미지 미션 챌린지 운영 매뉴얼. 단위는 mm (캔버스 1px = 1mm).
 (() => {
@@ -370,8 +371,9 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
   // ───── Robofest 2027 Game · RoboPetCare Challenge ─────
   // 규정: Robofest Game Rules 2027 V3 (테이블 182×75cm, 치수 ±2cm, 3.2 Field Specifications). 시뮬레이터는 밀어서 옮기는 2D 근사입니다.
   // 동물병원·미용실·화장실(20×5cm 구조물)은 규정 그림처럼 테이블 가장자리 바깥에 붙어 있어, 고양이·건전지를 가장자리 밖으로 밀어 떨어뜨려 넣습니다.
-  const G = { W: 1820, H: 750, bowl: [1332, 350], park: [100, 550, 200, 650], vet: [1220, 750, 1420, 800], groomer: [400, 750, 600, 800], litter: [1070, -50, 1270, 0], disp: [425, 0, 575, 145],
-    // 디스펜서: 받침(15cm × 약 9cm)이 북쪽 가장자리에 붙고, 기둥 위 기울어진 사료통이 테이블 쪽으로 나옵니다 (레고 준비물 파일 크기).
+  const G = { W: 1820, H: 750, bowl: [1332, 350], park: [100, 550, 200, 650], vet: [1220, 750, 1420, 800], groomer: [400, 750, 600, 800], litter: [1070, -50, 1270, 0], disp: [470, 93, 530, 130],
+    // 디스펜서: 받침(15cm × 약 9cm)이 북쪽 가장자리에 붙고, 기둥 위 15° 기울어진 사료통은 낮은 끝(막이)이 북쪽 가장자리, 열린 높은 끝(배출구)이 테이블 쪽입니다 (레고 준비물 파일 크기).
+    //   disp = 배출구 아래 자리: 로봇이 이 자리에 들어오면 통 안의 사료가 0.5초마다 1개씩 떨어집니다 (팔로 꺼내는 동작의 2D 근사).
     // 펫토이: 받침(4 × 12cm)의 남쪽 끝이 집 선(35cm)에 닿고, 고리(페그)는 북쪽을 향합니다.
     dispW: [500, 44, 152, 88], toyW: [1670, 290, 40, 120] };
   const DIRS = { N: ['북', 'North', Math.PI], E: ['동', 'East', Math.PI / 2], S: ['남', 'South', 0], W: ['서', 'West', -Math.PI / 2] };
@@ -414,7 +416,7 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
         for (const [x, y] of [[100, 100], [100, 350], [100, 500], [1270, 600], [1370, 600], [1120, 50], [1170, 100], [1220, 50]]) { c.beginPath(); c.arc(x, y, 7, 0, Math.PI * 2); c.stroke(); }
         c.fillStyle = '#d6dbe3'; c.fillRect(G.dispW[0] - G.dispW[2] / 2, 0, G.dispW[2], G.dispW[3]); // 디스펜서 받침
         c.fillStyle = '#d6dbe3'; c.fillRect(G.toyW[0] - G.toyW[2] / 2, G.toyW[1] - G.toyW[3] / 2, G.toyW[2], G.toyW[3]); // 펫토이 받침
-        c.strokeStyle = '#9fb4d8'; c.setLineDash([8, 6]); c.strokeRect(G.disp[0], G.dispW[3] + 2, G.disp[2] - G.disp[0], G.disp[3] - G.dispW[3] - 2); c.setLineDash([]); // 사료 자리
+        c.strokeStyle = '#9fb4d8'; c.setLineDash([8, 6]); c.strokeRect(G.disp[0], G.disp[1], G.disp[2] - G.disp[0], G.disp[3] - G.disp[1]); c.setLineDash([]); // 배출구 아래 자리
         // 테이블 밖 구조물의 자리 (가장자리 띠) — 화장실(북), 동물병원·미용실(남)
         for (const [r, col] of [[G.litter, '#f5b400'], [G.vet, '#5aa84a'], [G.groomer, '#86c27a']]) { c.fillStyle = col; c.fillRect(r[0], r[1] < 0 ? 0 : h - 8, r[2] - r[0], 8); }
         c.fillStyle = '#9aa0aa'; c.font = 'bold 22px sans-serif'; c.textAlign = 'center';
@@ -432,7 +434,13 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
           P(1670, 212, { kind: 'nut', shape: 'cyl', r: 15, hgt: 15, mass: .03, color: 0xb0b4bb }), // 펫토이 고리 아래 (2D 근사)
         ];
         for (const [x, y] of [[1120, 50], [1170, 100], [1220, 50]]) out.push(P(x, y, { kind: 'debris', shape: 'cyl', r: 10, hgt: 14, mass: .023, color: 0xe07b18 }));
-        for (let i = 0; i < 10; i++) out.push(P(452 + (i % 5) * 24, 106 + Math.floor(i / 5) * 24, { kind: 'food', shape: 'cyl', r: 10, hgt: 14, mass: .004, color: 0x18a0a8 }));
+        // 사료 10개: 디스펜서 위 사료통 안, 낮은 끝 막이에 기대어 2줄 × 5개 (모형 좌표 mm → 경기장).
+        //   held = 통 안: 물체 계산(밀기·물리엔진)에서 빠지고, 화면에는 통 안 자리(hp)에 15° 기울여 그립니다.
+        for (let k = 0; k < 5; k++) for (const row of [-1, 1]) {
+          const xm = -58.3 + k * 19.32, ym = 269 + 0.268 * xm;          // 통 바닥 위 사료 자리 (막이에서 위쪽으로)
+          const cx = 500 - row * 12, cy = 29 + xm - 1.8, cyH = 0.8 + ym + 6.8; // 경기장 x·y(mm)와 높이
+          out.push(P(500, 44, { kind: 'food', shape: 'cyl', r: 10, hgt: 14, mass: .004, color: 0x18a0a8, held: 1, k, base: { x: wx(500), z: wz(44), th: 0 }, hp: [cx - 500, cyH - 7, cy - 44] }));
+        }
         return out;
       },
     };
@@ -442,7 +450,26 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
       const moved = (o, d = 30) => o.fallen || Math.hypot(o.x - o._sx, o.z - o._sz) > d;
       const of = k => ps.filter(o => o.kind === k);
       if (!R.started) R.x.th0 = p.th; // 출발 직전의 방향
-      const food = of('food'), fOut = food.filter(o => o.fallen || !inR(o, G.disp)).length;
+      const food = of('food');
+      // 통 안의 사료: 화면 자리 맞추기 → 로봇이 배출구 아래에 있으면 0.5초마다 1개씩 (위쪽 것부터) 떨어뜨림
+      const T3 = window.__cad && window.__cad.THREE;
+      for (const o of food) if (o.held && o.mesh && T3 && !o.mesh.userData.hp) {
+        const g = new T3.Group(); while (o.mesh.children.length) g.add(o.mesh.children[0]);
+        g.position.set(o.hp[0], o.hp[1], o.hp[2]); g.rotation.x = -15 * Math.PI / 180; o.mesh.add(g); o.mesh.userData.hp = g;
+      }
+      const inBin = food.filter(o => o.held).sort((a, b) => b.k - a.k), t = U.time();
+      if (R.started && !R.ended && inBin.length && overlapsRect([wx(G.disp[0]), wz(G.disp[1]), wx(G.disp[2]), wz(G.disp[3])])) {
+        if (R.x.drop == null) R.x.drop = t - 0.5;
+        while (inBin.length && t - R.x.drop >= 0.5) {
+          const o = inBin.shift(); R.x.drop += 0.5;
+          o.held = 0; delete o.base; o.y0 = o.hgt / 2;
+          o.x = wx(500 + (Math.random() - 0.5) * 24); o.z = wz(112 + (Math.random() - 0.5) * 10); o.vx = o.vz = 0;
+          if (o.mesh && o.mesh.userData.hp) { o.mesh.userData.hp.position.set(0, 0, 0); o.mesh.userData.hp.rotation.set(0, 0, 0); }
+          const ph = U.phys && U.phys(); // 물리엔진: 배출구 높이(약 28cm)에서 떨어뜨림
+          if (ph && ph.addProp && !o.body) { o.y0 = 280; ph.addProp(o); o.y0 = o.hgt / 2; }
+        }
+      } else R.x.drop = null;
+      const fOut = food.filter(o => !o.held).length;
       const fIn = food.filter(o => !o.fallen && Math.hypot(cv(o)[0] - G.bowl[0], cv(o)[1] - G.bowl[1]) <= 60).length;
       // 가장자리 밖 구조물: 그 구간에서 테이블 밖으로 떨어진 물체 (구조물 폭 ±1.5cm)
       const offInto = (o, r) => { if (!o || !o.fallen) return false; const [x, y] = cv(o); return x >= r[0] - 15 && x <= r[2] + 15 && (r[1] < 0 ? y < 40 : y > h - 40); };
@@ -526,7 +553,7 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
     6: m => { const jr = m.div === 'jr', l = lay(6), X = l.X * 10, d = DIRS[l.ori], wa = l.cats ? 1370 : 1270, oa = l.cats ? 1270 : 1370; return [
       [L('경기장과 출발선', 'Field and start line'), L(`182×75cm 테이블입니다. 로봇은 일부가 출발선 위에 걸친 상태로 시작하며, 출발선의 위치 X는 서쪽 끝에서 70~90cm 사이입니다(이번 배치 ${l.X}cm).`, `The 182×75 cm table. The robot starts with some part over the start line; X is 70–90 cm from the west edge (now ${l.X} cm).`), [X - 40, 0, X + 40, 750]],
       [L('UTF (당일 공개 요소)', 'UTF (unveiled on the day)'), L(`작업 시간 30분 직전에 공개됩니다. 이번 배치: 시작 방향 ${d[0]}쪽, 고양이 a=${l.cats ? '주황' : '흰색'} · b=${l.cats ? '흰색' : '주황'}, X=${l.X}cm, 그리고 종료 과제. 🎲 새 배치를 누르면 UTF가 새로 나옵니다.`, `Unveiled just before the 30-minute work time. Now: start facing ${d[1]}, cat a=${l.cats ? 'orange' : 'white'}, b=${l.cats ? 'white' : 'orange'}, X=${l.X} cm, plus the ending task.`), [X - 120, 255, X + 120, 495]],
-      [L('#1 사료 배달 (20점)', '#1 Food delivery (20)'), L('북쪽 가장자리의 디스펜서에서 사료 10개를 꺼내(1개당 1점) 펫호텔 그릇에 넣습니다(1개당 1점). 시뮬레이터에서는 디스펜서 앞의 사료 자리(점선) 밖으로 밀어내면 "꺼냄", 그릇 원 안으로 밀어 넣으면 "그릇 안"입니다. 디스펜서를 건드리면 −10점입니다.', 'Take 10 food pieces out of the dispenser on the north edge (1 each) and put them in the Pet Hotel bowl (1 each). In the simulator, push them out of the dashed food area in front of the dispenser and into the bowl circle. Touching the dispenser costs 10.'), [[415, 0, 585, 210], [1235, 255, 1430, 445]]],
+      [L('#1 사료 배달 (20점)', '#1 Food delivery (20)'), L('북쪽 가장자리의 디스펜서에서 사료 10개를 꺼내(1개당 1점) 펫호텔 그릇에 넣습니다(1개당 1점). 사료는 기둥 위 사료통 안에 들어 있습니다(낮은 끝은 북쪽 가장자리, 열린 끝은 테이블 쪽). 시뮬레이터에서는 로봇이 열린 끝 바로 아래 자리(점선)에 들어가 있으면 사료가 0.5초마다 1개씩 떨어져 "꺼냄"이 되고, 그릇 원 안으로 밀어 넣으면 "그릇 안"입니다. 디스펜서 받침을 건드리면 −10점입니다.', 'The food sits in the bin on top of the dispenser post (low end at the north edge, open end toward the table). In the simulator, while the robot is in the dashed spot right under the open end, one piece drops every 0.5 s and counts as out; push them into the bowl circle for in bowl. Touching the dispenser base costs 10.'), [[415, 0, 585, 140], [1235, 255, 1430, 445]]],
       [L('#2 화장실 청소 (9점)', '#2 Litter box (9)'), L('배설물(AA 건전지) 3개를 북쪽 가장자리 바깥에 붙은 화장실(20×5cm, 서쪽 끝에서 107~127cm) 안으로 밀어 떨어뜨립니다. 1개당 3점입니다.', 'Push the 3 debris (AA batteries) over the north edge into the litter box (20×5 cm, 107–127 cm from the west edge) mounted outside the table, 3 points each.'), [1070, 0, 1270, 130]],
       [L('#3 강아지 산책 (14점)', '#3 Walk the dog (14)'), L('강아지를 출발 위치에서 초록색 강아지공원으로 옮깁니다. 완전히 안 10점, 일부만 안 8점, 움직이기만 하면 4점입니다. 가는 길의 우편함 2개를 건드리지 않으면 1개당 2점입니다.', 'Move the dog to the green dog park: fully in 10, partly 8, just moved 4. Each mailbox left untouched is 2.'), [[60, 60, 140, 150], [70, 320, 130, 530], [90, 540, 210, 660]]],
       [L('#4 집에서 놀아주기 (10점)', '#4 Play at the house (10)'), L('집의 펫토이에서 고리에 걸린 너트를 빼내 줄이 움직이게 합니다. 시뮬레이터에서는 고리 아래의 너트를 3cm 넘게 움직이면 인정하고, 펫토이에 닿으면 −10점입니다.', 'Pull the nut off the peg of the pet toy so the string moves. In the simulator, move the nut under the peg more than 3 cm; touching the toy costs 10.'), [[1620, 170, 1720, 250], [1630, 220, 1710, 360]]],

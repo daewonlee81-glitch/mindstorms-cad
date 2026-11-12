@@ -51,8 +51,9 @@
     }
   };
   const fixed = grp => {
-    // 디스펜서: 모형 x(깊이, 받침 −29~59mm) → 테이블 남쪽, 모형 z(15cm) → 가장자리 방향. 받침 뒤끝이 북쪽 가장자리에 붙습니다.
-    const d = ldrGroup('disp'); d.rotation.y = Math.PI / 2; d.position.set(wx(DISP[0]), 0.8, wz(59)); grp.add(d);
+    // 디스펜서: 모형 x(깊이, 받침 −29~59mm) → 테이블 남쪽(+), 모형 z(15cm) → 가장자리 방향. 받침 뒤끝이 북쪽 가장자리에 붙습니다.
+    //   사료통의 낮은 끝(막이)은 북쪽 가장자리 쪽, 열린 높은 끝(배출구)은 테이블 쪽입니다. 사료 10개는 umc.js가 통 안에 놓습니다.
+    const d = ldrGroup('disp'); d.rotation.y = -Math.PI / 2; d.position.set(wx(DISP[0]), 0.8, wz(DISP[1] - 15)); grp.add(d);
     // 펫토이: 받침(4×12cm)이 남북 방향, 고리(모형 +z)는 북쪽.
     const t = ldrGroup('toy'); t.rotation.y = Math.PI; t.position.set(wx(TOY[0]), 0.8, wz(TOY[1])); grp.add(t);
     frames(grp);
