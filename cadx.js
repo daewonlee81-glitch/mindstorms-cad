@@ -52,6 +52,14 @@
   // ───────────── 1. 밝은 미리보기 ─────────────
   let bright = store.get('mscad.brightGhost', '1') !== '0';
   const TINT = new THREE.Color(0x4fc3ff);
+  // 팔레트에서 끌 때 브라우저가 커서에 붙여 보여주는 그림(썸네일)이 Safari·다크 모드에서 검은 네모로 보여
+  // 붙일 자리를 가림 → 투명한 1픽셀 그림으로 바꿉니다. 3D 화면 위에서는 밝은 미리보기가 부품을 보여줍니다.
+  // (app.js 의 ondragstart 가 썸네일로 정한 뒤에 돌도록 document 의 버블 단계에서 바꿉니다.)
+  const BLANK = new Image(); BLANK.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  document.addEventListener('dragstart', e => {
+    const el = e.target && e.target.closest && e.target.closest('#partList .part');
+    if (el && e.dataTransfer && bright) try { e.dataTransfer.setDragImage(BLANK, 0, 0); } catch { }
+  });
   cadx.ghost = (group) => {
     group.traverse(o => {
       const mats = o.material && (Array.isArray(o.material) ? o.material : [o.material]);
