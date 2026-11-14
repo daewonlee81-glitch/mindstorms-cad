@@ -1,0 +1,15 @@
+RoboMakers VLA 도우미 — 빠른 사용법
+====================================
+
+1. 이 폴더의 파일을 더블클릭해서 도우미를 켭니다.
+     Windows : start-windows.bat   (보안 경고가 나오면 "추가 정보 → 실행" 또는 "실행")
+     Mac     : start-mac.command   (오른쪽 클릭 → 열기 → 열기)
+   처음 한 번은 1~3분 걸립니다. 검은 창은 끄지 말고 그대로 두세요.
+
+2. Chrome(또는 Edge)에서 MindStorms CAD → 로봇 시뮬레이터 → 오른쪽 "🤖 VLA 도우미" → [연결]
+   Chrome 이 "로컬 네트워크의 기기에 연결" 을 물으면 [허용].
+
+3. 블록 목록 "🤖 VLA" → 「👁️ VLA로 주행 · 지시: 빨간 칸으로 가」 를 「프로그램 시작할 때」 아래에 붙이고 ▶ 실행.
+
+자세한 설명(그림·문제 해결):
+https://github.com/daewonlee81-glitch/mindstorms-cad/blob/main/vla-helper/README.md

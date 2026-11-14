@@ -216,10 +216,25 @@ ${[-40, -20, 0, 20, 40].map(x => `1 0 ${x} 10.05 0 6 0 0 0 1 0 0 0 6 4-4disc.dat
   };
   installGen(); setInterval(installGen, 2000); // 워드블럭 동기화가 생성기를 다시 정의해도 되돌림
 
+  // 아무 자리의 카메라 그림 (vla.js 의 로봇 앞 카메라) — cam: { o, d } 로봇 좌표(THREE.Vector3), opt: { pose, w, h, fov }
+  const view = (cam, opt) => {
+    const R = X.robot; if (!R || !cam) return null; opt = opt || {};
+    const w = opt.w || 96, h = opt.h || 72, th = Math.tan((opt.fov || 70) * Math.PI / 360), tv = th * h / w;
+    const O = toWorld(R, cam.o, false, opt.pose), F = toWorld(R, cam.d, true, opt.pose).normalize();
+    const up0 = Math.abs(F.y) > .95 ? new T3.Vector3(0, 0, 1) : new T3.Vector3(0, 1, 0);
+    const right = new T3.Vector3().crossVectors(F, up0).normalize(), up = new T3.Vector3().crossVectors(right, F).normalize();
+    const img = new Uint8ClampedArray(w * h * 4), D = new T3.Vector3();
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      D.copy(F).addScaledVector(right, ((i + .5) / w * 2 - 1) * th).addScaledVector(up, (1 - (j + .5) / h * 2) * tv).normalize();
+      const c = shoot(O, D).c, k = (j * w + i) * 4; img[k] = c[0]; img[k + 1] = c[1]; img[k + 2] = c[2]; img[k + 3] = 255;
+    }
+    return { w, h, img };
+  };
+
   // 포트 표(시뮬레이터 오른쪽)에 보이는 값
   window.__husky = {
     renderAt: (port, pose, cf, tag) => render(port, { pose, cfg: cf, tag: tag || ':opp' }),
-    render,
+    render, view,
     text: port => { const r = render(port); if (!r) return ''; if (!r.id) return t('안 보임'); return r.algo === 'line' ? `${t('선')} ${r.v[0]}→${r.v[1]}` : `ID${r.id} · ${r.v[0]},${r.v[1]} · W${r.v[2]}`; },
   };
 
