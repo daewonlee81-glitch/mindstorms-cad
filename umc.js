@@ -137,6 +137,17 @@
       c.fillStyle = 'rgba(255, 214, 10, 0.28)'; c.fillRect(q[0], q[1], q[2] - q[0], q[3] - q[1]);
       c.strokeStyle = '#f08c00'; c.lineWidth = 8; c.setLineDash([24, 14]); c.strokeRect(q[0], q[1], q[2] - q[0], q[3] - q[1]); c.setLineDash([]);
     }
+    // 경로 (rfguide.js): 로봇 중심이 지나는 길 — 주황 점선, 시작 점, 끝 화살표
+    const ex = (st[Math.max(0, Math.min(st.length - 1, GUIDE.i))] || [])[3], pa = ex && ex.path;
+    if (pa && pa.length > 1) {
+      c.save(); c.strokeStyle = '#e8590c'; c.fillStyle = '#e8590c'; c.lineWidth = 7; c.lineJoin = 'round'; c.setLineDash([18, 10]);
+      c.beginPath(); pa.forEach((p, k) => (k ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]))); c.stroke(); c.setLineDash([]);
+      c.beginPath(); c.arc(pa[0][0], pa[0][1], 14, 0, Math.PI * 2); c.fill();
+      let k = pa.length - 1; while (k > 0 && Math.hypot(pa[k][0] - pa[k - 1][0], pa[k][1] - pa[k - 1][1]) < 1) k--;
+      const a = pa[k], b = pa[k - 1] || a, an = Math.atan2(a[1] - b[1], a[0] - b[0]);
+      c.beginPath(); c.moveTo(a[0] + 30 * Math.cos(an), a[1] + 30 * Math.sin(an)); c.lineTo(a[0] + 30 * Math.cos(an + 2.5), a[1] + 30 * Math.sin(an + 2.5)); c.lineTo(a[0] + 30 * Math.cos(an - 2.5), a[1] + 30 * Math.sin(an - 2.5)); c.closePath(); c.fill();
+      c.restore();
+    }
   };
 
   // ───── 그리기 도우미 ─────
@@ -603,7 +614,10 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
       [L('과제', 'The task'), jr ? L('상자 앞 10cm에 정지하고 삐 소리를 1번 냅니다.', 'Stop 10 cm from the box and beep once.') : L('상자 앞 10cm에 3초 정지하면서 거리 D(cm)를 화면에 보여주고, 출발 구역으로 돌아옵니다.', 'Stop 10 cm from the box for 3 s while showing D in cm, then return to the start zone.'), null],
       [L('채점', 'Scoring'), li([L('출발 구역 벗어남 5', 'Leave the start zone 5'), L('정지 거리 오차 ±1cm 30 · ±2cm 20 · ±4cm 10', 'Stop error ±1 cm 30 · ±2 cm 20 · ±4 cm 10')].concat(jr ? [L('정지 후 삐 소리 1번 5', 'One beep 5')] : [L('D 표시 ±2cm 20 (±4cm는 10)', 'D shown ±2 cm 20 (±4 cm: 10)'), L('출발 구역 복귀 15', 'Return 15')])), null],
       [L('풀이 순서', 'How to solve it'), li((jr ? [] : [L('출발 전에 거리 센서 값을 읽어 D를 계산(센서가 로봇 앞 끝보다 3mm 뒤)', 'Before moving, read the distance sensor to get D')]).concat([L('빠르게 전진하다 22cm 안으로 들어오면 천천히', 'Drive fast, then slow down inside 22 cm'), L('거리 센서가 10.3cm 이하가 되면 정지', 'Stop when the sensor reads 10.3 cm or less'), jr ? L('삐 소리 1번', 'Beep once') : L('D 표시, 3초 기다린 뒤 간 만큼 후진', 'Show D, wait 3 s, back up the same distance')])), null]]; },
-    6: m => { const jr = m.div === 'jr', l = lay(6), X = l.X * 10, d = DIRS[l.ori], wa = l.cats ? 1370 : 1270, oa = l.cats ? 1270 : 1370; return [
+    6: m => { const rules = rules6(m), rf = window.__rfGuide; return rf && rf.wrap ? rf.wrap(rules, m, lay(6)) : rules; },
+  };
+  // Robofest 규정 설명 (rfguide.js 가 있으면 RF Robot 풀이 단계로 다시 짬)
+  const rules6 = m => { const jr = m.div === 'jr', l = lay(6), X = l.X * 10, d = DIRS[l.ori], wa = l.cats ? 1370 : 1270, oa = l.cats ? 1270 : 1370; return [
       [L('경기장과 출발선', 'Field and start line'), L(`182×75cm 테이블입니다. 로봇은 일부가 출발선 위에 걸친 상태로 시작하며, 출발선의 위치 X는 서쪽 끝에서 70~90cm 사이입니다(이번 배치 ${l.X}cm).`, `The 182×75 cm table. The robot starts with some part over the start line; X is 70–90 cm from the west edge (now ${l.X} cm).`), [X - 40, 0, X + 40, 750]],
       [L('UTF (당일 공개 요소)', 'UTF (unveiled on the day)'), L(`작업 시간 30분 직전에 공개됩니다. 이번 배치: 시작 방향 ${d[0]}쪽, 고양이 a=${l.cats ? '주황' : '흰색'} · b=${l.cats ? '흰색' : '주황'}, X=${l.X}cm, 그리고 종료 과제. 🎲 새 배치를 누르면 UTF가 새로 나옵니다.`, `Unveiled just before the 30-minute work time. Now: start facing ${d[1]}, cat a=${l.cats ? 'orange' : 'white'}, b=${l.cats ? 'white' : 'orange'}, X=${l.X} cm, plus the ending task.`), [X - 120, 255, X + 120, 495]],
       [L('#1 사료 배달 (20점)', '#1 Food delivery (20)'), L('북쪽 가장자리의 디스펜서에서 사료 10개를 꺼내(1개당 1점) 펫호텔 그릇에 넣습니다(1개당 1점). 사료는 기둥 위 사료통 안에 들어 있습니다(낮은 끝은 북쪽 가장자리, 열린 끝은 테이블 쪽). 시뮬레이터에서는 로봇이 열린 끝 바로 아래 자리(점선)에 들어가 있으면 사료통이 기둥 꼭대기를 축으로 기울어 사료가 0.5초마다 1개씩 미끄러져 떨어지고, 바닥에 닿으면 "꺼냄"입니다. 펫호텔은 은색 원형 그릇(높이 약 5cm, 입구 12cm)이며, 간단 모드에서는 그릇에 밀어 붙인 사료가 그릇 안으로 들어가고 물리엔진에서는 그릇 위로 올려 넣어야 "그릇 안"입니다. 디스펜서 받침을 건드리면 −10점입니다.', 'The food sits in the bin on top of the dispenser post (low end at the north edge, open end toward the table). In the simulator, while the robot is in the dashed spot right under the open end, the bin tips on its post and one piece slides out every 0.5 s, counting as out when it lands. The Pet Hotel is a round silver bowl (about 5 cm high, 12 cm opening); in simple mode food pushed against the bowl drops in, with physics it must be lifted into it. Touching the dispenser base costs 10.'), [[415, 0, 585, 140], [1235, 255, 1430, 445]]],
@@ -613,8 +627,7 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
       [L('#5 흰 고양이 → 동물병원 (10점)', '#5 White cat → Vet (10)'), L('흰 고양이를 남쪽 가장자리 바깥에 붙은 동물병원(122~142cm) 안으로 밀어 넣습니다. 움직였지만 병원 밖이면 5점입니다. 어느 자리가 흰 고양이인지는 UTF로 정해집니다.', 'Push the white cat over the south edge into the Vet (122–142 cm) mounted outside the table; moved but outside is 5. The UTF says which spot holds the white cat.'), [[wa - 45, 555, wa + 45, 645], [1220, 685, 1420, 750]]],
       [L('#6 주황 고양이 → 미용실 (10점)', '#6 Orange cat → Groomer (10)'), L('주황 고양이를 출발선 너머 서쪽, 남쪽 가장자리 바깥에 붙은 미용실(40~60cm) 안으로 밀어 넣습니다. 움직였지만 밖이면 5점입니다.', 'Take the orange cat west across the start line and push it over the south edge into the Groomer (40–60 cm) mounted outside the table; moved but outside is 5.'), [[oa - 45, 555, oa + 45, 645], [400, 685, 600, 750]]],
       [L('#7 종료 과제 (16점)', '#7 Ending task (16)'), jr ? L('로봇 일부가 출발선 위에 걸친 채 정지하면 8점, 정지한 상태에서 UTF 문제의 답을 화면에 보여주면 8점입니다. 2분이 끝날 때 로봇이 움직이고 있으면 둘 다 받을 수 없습니다.', 'Stop with part of the robot over the start line (8) and show the UTF answer while stopped (8). If the robot is still moving at 2:00, neither counts.') : L('로봇 일부가 남쪽 가장자리 밖으로 걸친 채 정지하면 8점, 정지한 상태에서 x³÷100의 답을 보여주면 8점입니다. x는 서쪽 끝에서 출발선까지의 거리(70~90cm)로, 시니어는 임파운드 뒤에 공개되므로 로봇이 재야 합니다.', 'Stop with part of the robot over the south edge (8) and show x³÷100 while stopped (8). x is the start line distance from the west edge (70–90 cm); seniors only learn it after impound, so the robot must measure it.'), jr ? [X - 40, 0, X + 40, 750] : [0, 690, 1820, 750]],
-      [L('#8 로봇 온전 · 감점 · 순위', '#8 Robot intact · penalties · ranking'), li([L('런 내내 로봇이 온전하면 11점', 'Robot intact for the whole run: 11'), L('#9 펫토이·디스펜서를 망가뜨리거나 옮기면 1개당 −10 (시뮬레이터: 로봇이 닿으면)', '#9 Damaging or moving the toy or dispenser: −10 each (simulator: when the robot touches it)'), L('리셋 요청 −3 (런당 1회)', 'Reset request: −3 (once per run)'), L('모든 항목은 런이 끝난 시점에 채점', 'Everything is scored at the end of the run'), L('순위 = (두 라운드 최고점 + 평균점) ÷ 2', 'Rank = (best + average of two rounds) ÷ 2')]), null]]; },
-  };
+      [L('#8 로봇 온전 · 감점 · 순위', '#8 Robot intact · penalties · ranking'), li([L('런 내내 로봇이 온전하면 11점', 'Robot intact for the whole run: 11'), L('#9 펫토이·디스펜서를 망가뜨리거나 옮기면 1개당 −10 (시뮬레이터: 로봇이 닿으면)', '#9 Damaging or moving the toy or dispenser: −10 each (simulator: when the robot touches it)'), L('리셋 요청 −3 (런당 1회)', 'Reset request: −3 (once per run)'), L('모든 항목은 런이 끝난 시점에 채점', 'Everything is scored at the end of the run'), L('순위 = (두 라운드 최고점 + 평균점) ÷ 2', 'Rank = (best + average of two rounds) ÷ 2')]), null]]; };
 
   // ───── 등록 ─────
   const MAKE = { 1: m1, 2: m2, 3: m3, 4: m4, 5: m5 };
