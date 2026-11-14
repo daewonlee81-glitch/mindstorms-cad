@@ -9,6 +9,7 @@
   6. 시뮬레이터 로봇의 장치→포트 기록(Q.devices)과 ext.simRebuild / robot / simRunning
   7. 로봇 부품 복제본 Q.clones[부품 id]와 ext.motors() (모터 각도) — 추가 모터에 붙은 부품 돌리기
   8. 허스키렌즈: 센서 종류 husky, 포트 표 값(window.__husky.text), ext.matPx(x,z) 매트 색
+  9. 라인트레이싱 학습 컬러센서 2개 (line2.js): E0 가 window.__line2.spec 을 먼저 묻고, 채점(L2)은 두 센서 가운데 점 둘레의 선 칸으로
 사용: python3 patch_cadx.py app.js
 """
 import sys
@@ -48,6 +49,14 @@ PATCHES = [
     ('get simRunning(){return!!q.running},motors:()=>On,',
      'get simRunning(){return!!q.running},motors:()=>On,matPx:(x,z)=>{let p=Math.round(x+ut/2),u=Math.round(z+yt/2);if(!Zi||p<0||u<0||p>=ut||u>=yt)return null;let h=(u*ut+p)*4;return[Zi[h],Zi[h+1],Zi[h+2]]},',
      'matPx:'),
+    # 9. 라인트레이싱 학습: 컬러센서 2개 (line2.js)
+    ('function E0(n="p"){let e=Av();if(!e)return T("\\uB85C\\uBD07\\uC5D0 \\uCEEC\\uB7EC \\uC13C\\uC11C\\uAC00 \\uC5C6\\uC2B5\\uB2C8\\uB2E4");',
+     'function E0(n="p"){let e=Av();if(!e)return T("\\uB85C\\uBD07\\uC5D0 \\uCEEC\\uB7EC \\uC13C\\uC11C\\uAC00 \\uC5C6\\uC2B5\\uB2C8\\uB2E4");if(window.__line2&&window.__line2.pair()){let __s=window.__line2.spec(n,T);if(__s)return __s.onBest=u=>{K.genBest=u.slice(),K.genCtrl=n,hp()},__s}'),
+    ('function L2(){let n=Tv(),e=new Uint8Array(n.on.length),t=Av(),',
+     'function L2(){let __L=window.__line2&&window.__line2.pairS&&window.__line2.pairS(),n=Tv(),e=new Uint8Array(n.on.length),t=Av(),'),
+    ('let d=ur(t.port);if(!d){s+=l;return}let{o:p}=p0(t),u=Tc(d);',
+     # 센서 2개: 두 센서 가운데 점에서 (센서 간격/2 + 15mm) 안에 있는 선 칸을 따라간 칸으로, 그 안에 선이 없으면 선 밖
+     'if(__L){let A=p0(__L[0]).o,B=p0(__L[1]).o,px=(A.x+B.x)/2,pz=(A.z+B.z)/2;if(Nt.raise&&!rp(px,pz)){s+=l;return}let R0=Math.hypot(A.x-B.x,A.z-B.z)/2+15,h=Math.floor((px+ut/2)/or),f=Math.floor((pz+yt/2)/or),k=Math.ceil(R0/or),hit=0;for(let m=f-k;m<=f+k;m++)for(let _=h-k;_<=h+k;_++){if(_<0||m<0||_>=n.nx||m>=n.ny)continue;if(Math.hypot((_+.5)*or-ut/2-px,(m+.5)*or-yt/2-pz)>R0)continue;let g=m*n.nx+_;n.on[g]&&(hit=1,e[g]||(e[g]=1,i++))}hit||(s+=l);o==null&&a()>=1&&(o=c);return}let d=ur(t.port);if(!d){s+=l;return}let{o:p}=p0(t),u=Tc(d);'),
 ]
 
 
