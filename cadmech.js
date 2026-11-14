@@ -230,12 +230,13 @@
           const id = qq.shift();
           for (const L of links.get(id)) {
             const o = L.o; if (E.has(o) || groupOf.get(o) === gr) continue;
-            if (anchor.has(o) || bearing.has(o) || groupOf.has(o) || L.otherRotor) { bad = true; break; }
+            // 같은 축에 둥근 구멍으로 끼운 부품(베어링)도 축 밖의 핀으로 도는 무리에 묶여 있으면 함께 돎 (예: 로터 핀 + 축이 함께 지나는 빔)
+            if (anchor.has(o) || groupOf.has(o) || L.otherRotor) { bad = true; break; }
             E.add(o); qq.push(o); if (E.size > 60) { bad = true; break; }
           }
         }
-        if (bad || [...E].some(id => bearing.has(id))) continue;
-        for (const id of E) { groupOf.set(id, gr); gr.ids.push(id); }
+        if (bad) continue;
+        for (const id of E) { groupOf.set(id, gr); gr.ids.push(id); bearing.delete(id); }
       }
       return gr.ids.length && BIG(gr.ids.length) ? 'big' : '';
     };
