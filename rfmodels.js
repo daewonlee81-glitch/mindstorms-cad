@@ -25,7 +25,8 @@
   const W = 1820, H = 750, wx = x => x - W / 2, wz = y => y - H / 2, RAISE = 45;
 
   // 경기장 고정 모형 (umc.js 의 받침 위치와 같게)
-  const DISP = [500, 44], TOY = [1670, 290];
+  const DISP = [500, 44], TOY = [1670, 290], PIVY = 250; // PIVY: 사료통 축 높이(mm, 기둥 꼭대기)
+  const BOWL = [1332, 350]; // 펫호텔 그릇 (umc.js 와 같은 자리)
   const OUT = [ // 테이블 밖 구조물 [x0, x1, 북(-1)/남(+1), 색, 이름]
     [1070, 1270, -1, 0xf5b400, ['화장실', 'Litter']],
     [1220, 1420, 1, 0x5aa84a, ['동물병원', 'Vet']],
@@ -54,14 +55,40 @@
     // 디스펜서: 모형 x(깊이, 받침 −29~59mm) → 테이블 남쪽(+), 모형 z(15cm) → 가장자리 방향. 받침 뒤끝이 북쪽 가장자리에 붙습니다.
     //   사료통의 낮은 끝(막이)은 북쪽 가장자리 쪽, 열린 높은 끝(배출구)은 테이블 쪽입니다. 사료 10개는 umc.js가 통 안에 놓습니다.
     const d = ldrGroup('disp'); d.rotation.y = -Math.PI / 2; d.position.set(wx(DISP[0]), 0.8, wz(DISP[1] - 15)); grp.add(d);
+    // 사료통(기둥 위, 높이 23.8cm 이상)을 따로 떼어 기둥 꼭대기(받침 가운데 위 25cm)를 축으로 기울일 수 있게 합니다.
+    //   열린 끝(남쪽)이 내려가면 사료가 미끄러져 떨어집니다 — umc.js 가 window.__rfDisp.tilt(도)로 움직입니다.
+    const piv = new T.Group(); piv.position.set(wx(DISP[0]), 0.8 + PIVY, wz(DISP[1]));
+    const inner = new T.Group(); inner.rotation.y = -Math.PI / 2; inner.position.set(0, -PIVY, -15); piv.add(inner);
+    for (const m of [...d.children]) {
+      const g = m.geometry, idx = g.index.array, pos = g.attributes.position, up = [], dn = [];
+      for (let k = 0; k < idx.length; k += 3) { const y = (pos.getY(idx[k]) + pos.getY(idx[k + 1]) + pos.getY(idx[k + 2])) / 3; (y >= 238 ? up : dn).push(idx[k], idx[k + 1], idx[k + 2]); }
+      if (!up.length) continue;
+      const mk = arr => { const h = new T.BufferGeometry(); h.setAttribute('position', pos); if (g.attributes.normal) h.setAttribute('normal', g.attributes.normal); h.setIndex(arr); return h; };
+      m.geometry = mk(dn); inner.add(new T.Mesh(mk(up), m.material));
+    }
+    grp.add(piv);
+    window.__rfDisp = { pivot: piv, PIVY, tilt: deg => { piv.rotation.x = deg * Math.PI / 180; } };
     // 펫토이: 받침(4×12cm)이 남북 방향, 고리(모형 +z)는 북쪽.
     const t = ldrGroup('toy'); t.rotation.y = Math.PI; t.position.set(wx(TOY[0]), 0.8, wz(TOY[1])); grp.add(t);
     frames(grp);
+    grp.add(bowl());
+  };
+  // 펫호텔 그릇: 은색 원형 개 밥그릇 (규정: 높이 약 5cm, 입구 지름 12cm, 바닥 지름 17.5cm — 바닥이 넓은 미끄럼 방지 모양)
+  const bowl = () => {
+    const prof = [[0, 9], [44, 9], [50, 18], [55, 34], [59, 46], [60.5, 50], [63, 51], [66, 49], [72, 36], [80, 18], [86, 5], [87.5, 1.5], [87.5, 0], [0, 0]]
+      .map(([r, y]) => new T.Vector2(r, y));
+    const g = new T.LatheGeometry(prof, 64); g.computeVertexNormals();
+    const m = new T.Mesh(g, new T.MeshStandardMaterial({ color: 0xeef0f3, metalness: 0.35, roughness: 0.25, side: T.DoubleSide }));
+    m.position.set(wx(BOWL[0]), 0.6, wz(BOWL[1])); m.userData.rf = 1;
+    // 테두리 반사 띠 (은색이 잘 보이게)
+    const rim = new T.Mesh(new T.TorusGeometry(61.8, 1.6, 8, 64), new T.MeshStandardMaterial({ color: 0xf2f4f7, metalness: 0.7, roughness: 0.15 }));
+    rim.rotation.x = Math.PI / 2; rim.position.y = 50.4; m.add(rim);
+    return m;
   };
   // 충돌용 받침 상자는 모형이 보이면 숨깁니다 (충돌·감점 판정은 그대로).
   const hideWalls = scene => {
     if (scene) for (const ch of scene.children) if (ch.isGroup || ch.type === 'Group') for (const m of ch.children)
-      if (m.isMesh && m.geometry && m.geometry.type === 'BoxGeometry' && m.material && m.material.color && [0x4a8fd6, 0x8fbbe8].includes(m.material.color.getHex()) && !m.userData.rf) m.visible = false;
+      if (m.isMesh && m.geometry && m.geometry.type === 'BoxGeometry' && m.material && m.material.color && [0x4a8fd6, 0x8fbbe8, 0xc9ced6].includes(m.material.color.getHex()) && !m.userData.rf) m.visible = false;
   };
   const extras = grp => {
     const add = () => { if (!data || !isRF(U.mat())) return; const g = new T.Group(); g.userData.rf = 1; fixed(g); grp.add(g); hideWalls(grp.parent); };
