@@ -83,4 +83,4 @@ window.__umc={mats:uo,api:Wn,T:T,esc:ce,i18n:pr,pose:()=>Te,props:()=>Xe,time:()
 
 ## 자동 테스트
 
-`python tests/run.py` — 고친 뒤 다른 기능이 깨지지 않았는지 화면 없는 Chrome 으로 확인합니다 (자세한 내용은 [tests/README.md](tests/README.md)). GitHub 에 올리면 Actions 에서 저절로 돌아갑니다.
+`python tests/run.py` — 고친 뒤 다른 기능이 깨지지 않았는지 화면 없는 Chrome 으로 확인합니다 (자세한 내용은 [tests/README.md](tests/README.md)). 코드 구조와 고칠 때의 규칙은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). GitHub 에 올리면 Actions 에서 저절로 돌아갑니다.

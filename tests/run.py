@@ -383,6 +383,277 @@ async def t_helper(env):
         shutil.rmtree(rec, ignore_errors=True)
 
 
+# ───────────────────────── 기존 기능 ─────────────────────────
+@test("all-mats-load")
+async def t_mats(env):
+    """시뮬레이터 매트(경기장)를 하나씩 모두 골라 보며 오류가 없는지."""
+    pg = await env.page()
+    try:
+        opts = await pg.evaluate("[...document.querySelectorAll('#simMat option')].map(o => o.value).filter(Boolean)")
+        bad = []
+        for v in opts:
+            n0 = len(pg.errors)
+            await pg.select_option("#simMat", v)
+            await pg.wait_for_timeout(250)
+            ok = await pg.evaluate("!!(window.__umc.mat && window.__umc.mat())")
+            if not ok or len(pg.errors) > n0:
+                bad.append(f"{v}: {pg.errors[n0:n0 + 1] or '매트 없음'}")
+        check(len(opts) >= 10, f"매트가 너무 적음 ({len(opts)})")
+        check(not bad, "오류난 매트: " + "; ".join(bad[:5]))
+        return f"매트 {len(opts)}개"
+    finally:
+        await env.close(pg)
+
+
+async def open_ldr(pg, path=None, text=None, name="test.ldr"):
+    if path:
+        await pg.set_input_files("#fileIn", str(path))
+    else:
+        await pg.set_input_files("#fileIn", files=[{"name": name, "mimeType": "text/plain", "buffer": text.encode()}])
+    await pg.wait_for_function("window.__cad.model && window.__cad.model.parts && window.__cad.model.parts.length > 0", timeout=30000)
+    await pg.wait_for_timeout(800)
+
+
+@test("cad-open-save")
+async def t_cad(env):
+    """수업 도면(RM-LineBase)을 열고 .ldr 로 저장했을 때 부품이 그대로인지."""
+    pg = await env.page(sim=False)
+    try:
+        src = ROOT / "classes" / "BaseModel" / "RM-LineBase (1).ldr"
+        await open_ldr(pg, src)
+        n = await pg.evaluate("window.__cad.model.parts.length")
+        lines_in = [l for l in src.read_text(encoding="utf-8", errors="ignore").splitlines() if l.startswith("1 ")]
+        async with pg.expect_download(timeout=30000) as d:
+            await pg.click("#btnSave")
+        out = Path(await (await d.value).path()).read_text(encoding="utf-8", errors="ignore")
+        lines_out = [l for l in out.splitlines() if l.startswith("1 ")]
+        check(n >= 10, f"부품이 너무 적게 열림 ({n})")
+        check(len(lines_out) == n, f"저장한 .ldr 부품 줄 {len(lines_out)}개 ≠ 열린 부품 {n}개")
+        check(abs(len(lines_out) - len(lines_in)) <= 2, f"원본 {len(lines_in)}줄 ↔ 저장 {len(lines_out)}줄")
+        check(not pg.errors, f"페이지 오류: {pg.errors[:3]}")
+        return f"부품 {n}개"
+    finally:
+        await env.close(pg)
+
+
+@test("assembly-cards-zip")
+async def t_cards(env):
+    """조립카드 ZIP: 카드 그림·인쇄용 cards.html·.ldr 가 들어 있는지."""
+    import zipfile
+    pg = await env.page(sim=False)
+    try:
+        await open_ldr(pg, ROOT / "classes" / "BaseModel" / "RM-LineBase (1).ldr")
+        await pg.click("#btnCards")
+        await pg.wait_for_timeout(1500)
+        async with pg.expect_download(timeout=180000) as d:
+            await pg.click("#cardsSave")
+        z = zipfile.ZipFile(await (await d.value).path())
+        names = z.namelist()
+        pngs = [n for n in names if n.lower().endswith(".png")]
+        check(any(n.endswith("cards.html") for n in names), f"cards.html 없음 {names[:5]}")
+        check(any(n.lower().endswith(".ldr") for n in names), ".ldr 없음")
+        check(len(pngs) >= 3, f"카드 그림이 너무 적음 ({len(pngs)})")
+        big = max(z.getinfo(n).file_size for n in pngs)
+        check(big > 5000, f"카드 그림이 비어 보임 (가장 큰 것 {big}B)")
+        check(not pg.errors, f"페이지 오류: {pg.errors[:3]}")
+        return f"파일 {len(names)}개, 그림 {len(pngs)}장"
+    finally:
+        await env.close(pg)
+
+
+GEARS_LDR = """0 gear-test
+0 Name: gear-test.ldr
+1 16 0 0 0 1 0 0 0 1 0 0 0 1 10928.dat
+1 16 40 0 0 1 0 0 0 1 0 0 0 1 3648b.dat
+1 16 120 0 0 1 0 0 0 1 0 0 0 1 3649.dat
+"""
+
+
+@test("gear-ratios")
+async def t_gears(env):
+    """회전 실험: 8T → 24T → 40T 기어비가 −1/3, +1/5 인지."""
+    pg = await env.page(sim=False)
+    try:
+        await open_ldr(pg, text=GEARS_LDR, name="gear-test.ldr")
+        r = await pg.evaluate("""() => { const ps = window.__cad.model.parts; const res = window.__mech.solve(ps[0].id);
+          if (!res.ok) return { ok: false, why: res.why };
+          const k = {}; for (const G of res.groups) for (const id of G.ids) k[ps.findIndex(p => p.id === id)] = G.k; return { ok: true, k, meshes: res.meshes }; }""")
+        check(r["ok"], f"풀이 실패 {r}")
+        k = r["k"]
+        check(abs(k.get("0", 0) - 1) < 1e-6, f"8T 비 {k}")
+        check(abs(k.get("1", 0) + 1 / 3) < 1e-3, f"24T 비 {k.get('1')} (−1/3 예상)")
+        check(abs(k.get("2", 0) - 1 / 5) < 1e-3, f"40T 비 {k.get('2')} (+1/5 예상)")
+        return f"맞물림 {r['meshes']}쌍"
+    finally:
+        await env.close(pg)
+
+
+@test("every-block-codegen")
+async def t_blocks(env):
+    """도구 상자의 모든 블록: 시뮬레이터(JS) 코드 문법 + Pybricks 파이썬 문법."""
+    pg = await env.page()
+    try:
+        res = await pg.evaluate("""() => { const W = window.__wb, ws = W.ws(), types = [];
+          const walk = n => { if (!n) return; if (Array.isArray(n)) return n.forEach(walk); if (n.kind === 'block' && n.type) types.push(n.type); if (n.contents) walk(n.contents); };
+          const tb = W.wbToolbox(); walk(tb.contents || tb);
+          const AF = Object.getPrototypeOf(async function () {}).constructor, out = [];
+          for (const type of [...new Set(types)]) {
+            if (type === 'rm_start' || type === 'controls_flow_statements') continue; // 「반복 멈추기」는 반복 안에서만 쓰는 블록
+            ws.clear(); const s = ws.newBlock('rm_start'); s.initSvg(); s.render();
+            let b; try { b = ws.newBlock(type); b.initSvg(); b.render(); } catch (e) { out.push({ type, err: 'create: ' + e }); continue; }
+            if (b.previousConnection && s.nextConnection) { try { s.nextConnection.connect(b.previousConnection); } catch (e) { } }
+            else if (b.outputConnection) { /* 값 블록: 생성기만 확인 */ }
+            const r = { type, kind: b.outputConnection ? 'value' : 'stmt' };
+            try { const js = W.wbCompileSrc(ws).src; new AF('api', js); } catch (e) { r.err = 'js: ' + e; }
+            if (!r.err) { try { let py = W.wbGenPython(ws); r.py = typeof py === 'string' ? py : (py && (py.code || py.src)) || ''; } catch (e) { r.err = 'py: ' + e; } }
+            if (!r.err && b.outputConnection) { try { const j = javascript.javascriptGenerator; j.init(ws); j.blockToCode(b); const P = python.pythonGenerator; } catch (e) { r.err = 'jsval: ' + e; } }
+            out.push(r);
+          }
+          ws.clear(); return out; }""")
+        bad = [f"{r['type']}: {r['err'][:80]}" for r in res if r.get("err")]
+        for r in res:
+            if r.get("err") or not r.get("py"):
+                continue
+            try:
+                compile(r["py"], r["type"] + ".py", "exec")
+            except SyntaxError as e:
+                (OUT / f"block_{r['type']}.py").write_text(r["py"], encoding="utf-8")
+                bad.append(f"{r['type']}: 파이썬 문법 {e.msg} (tests/_out/block_{r['type']}.py)")
+        check(len(res) >= 100, f"블록이 너무 적음 ({len(res)})")
+        check(not bad, f"{len(bad)}개 블록 문제: " + "; ".join(bad[:6]))
+        return f"블록 {len(res)}종"
+    finally:
+        await env.close(pg)
+
+
+@test("auto-tuning-training-runs")
+async def t_training(env):
+    """🎓 학습 창: 라인트레이싱 자동 생성 학습이 오류 없이 몇 세대 돌아가는지 (라인 트레이싱 매트)."""
+    pg = await env.page()
+    try:
+        await pg.evaluate("localStorage.setItem('mscad.trModel', 'cem')")
+        await pg.click("#simTrain"); await pg.wait_for_timeout(800)
+        await pg.click("#trModeGen"); await pg.wait_for_timeout(300)  # 라인트레이싱 자동 생성 (블록 없이 시작)
+        t0 = await pg.evaluate("document.querySelector('#trStatus').textContent")
+        await pg.click("#trStart")
+        with contextlib.suppress(Exception):
+            await pg.wait_for_function(r"t0 => { const s = document.querySelector('#trStatus').textContent; return s !== t0 && /\d/.test(s); }", arg=t0, timeout=60000)
+        await pg.wait_for_timeout(4000)
+        st = await pg.evaluate("document.querySelector('#trStatus').textContent")
+        with contextlib.suppress(Exception):
+            await pg.click("#trStop", timeout=5000)
+        await pg.wait_for_timeout(500)
+        check(st and st != t0, f"학습 상태가 바뀌지 않음: {st!r}")
+        check(not pg.errors, f"페이지 오류: {pg.errors[:3]}")
+        return st[:60]
+    finally:
+        await env.close(pg)
+
+
+@test("othello-ai-field")
+async def t_othello(env):
+    """WRL 오셀로 AI 경기장: 판·가운데 블록·상대 로봇 켜기, 잠깐 달려도 오류 없음."""
+    pg = await env.page(mat="othello_ai")
+    try:
+        r = await pg.evaluate("({ props: window.__umc.props().length, ai: !!window.__othelloAI, opp: typeof window.__othelloAI.toggleOpp })")
+        check(r["ai"] and r["props"] >= 10, f"오셀로 AI 경기장 이상 {r}")
+        await set_program(pg, "rm_vla_teach", "x")
+        await pg.click("#simRun"); await pg.wait_for_timeout(2500); await pg.click("#simStop"); await pg.wait_for_timeout(400)
+        check(not pg.errors, f"페이지 오류: {pg.errors[:3]}")
+        return f"물체 {r['props']}개"
+    finally:
+        await env.close(pg)
+
+
+@test("code-save-json")
+async def t_simsave(env):
+    """💾 코드 저장(.json): 블록 프로그램이 다시 열 수 있는 형식으로 저장되는지."""
+    pg = await env.page()
+    try:
+        await set_program(pg, "rm_vla_drive", "빨간 칸으로 가")
+        async with pg.expect_download(timeout=20000) as d:
+            await pg.evaluate("window.__simCode.saveJson()")
+        j = json.loads(Path(await (await d.value).path()).read_text(encoding="utf-8"))
+        check(j.get("format") == "robomakers-blocks", f"형식 이상 {list(j)[:5]}")
+        txt = json.dumps(j.get("program"), ensure_ascii=False)
+        check("rm_vla_drive" in txt and "빨간 칸으로 가" in txt, "블록·지시가 저장되지 않음")
+    finally:
+        await env.close(pg)
+
+
+# ───────────────────────── 연결 고리 (app.js 훅) ─────────────────────────
+# 덧붙임 파일들이 app.js 에서 꺼내 쓰는 것들 — 하나라도 사라지면 그 기능이 조용히 멈춥니다. (docs/ARCHITECTURE.md)
+CONTRACT = {
+    "window.__umc": "T api cam ctl esc i18n mat mats phys pose props robot sim time",
+    "window.__cad": "THREE camera controls model objs root scene",
+    "window.__cad.ext": "add apply bundle index loader matPx motors palette push reload robot sel simRebuild simRunning status",
+    "window.__wb": "WB_LIB Ye dg enterSim hub lang proj save simOn wbBuild wbCompileSrc wbGenPython wbSources wbToolbox ws",
+}
+ADDON_GLOBALS = ("__cadx __cadxReady __classes __axes __backup __simRigs __simRigObjs __husky __mech __trx __othelloAI __simCode "
+                 "__line2 __trs __nnF __trainModel __rfGuide __umcGuide __wbSync __wbTb __vla __bc __vlaviz __nnviz").split()
+
+
+# index.html 의 <script> 순서: 왼쪽 파일은 오른쪽 파일들보다 뒤에 불러와야 함 (불러올 때 그 전역을 바로 씀)
+LOAD_AFTER = {
+    "wordblock-sync.js": ["app.js"], "classes.js": ["app.js"], "cadx.js": ["app.js"], "simports.js": ["app.js"], "huskylens.js": ["app.js"],
+    "cadmech.js": ["app.js"], "umc.js": ["app.js"], "rfmodels.js": ["umc.js"], "othelloai.js": ["umc.js", "huskylens.js"], "rfguide.js": ["umc.js"],
+    "simsave.js": ["app.js"], "line2.js": ["app.js"], "trainmodel.js": ["app.js"],
+    "vla.js": ["app.js", "wordblock-sync.js", "huskylens.js"], "bc.js": ["vla.js"], "vlaviz.js": ["bc.js", "vla.js"], "nnviz.js": ["trainmodel.js", "bc.js"],
+}
+
+
+@test("script-order")
+async def t_order(env):
+    """index.html 의 스크립트 순서가 파일끼리의 의존 순서와 맞는지 (docs/ARCHITECTURE.md)."""
+    import re
+    srcs = [re.sub(r"\?.*$", "", m) for m in re.findall(r'<script[^>]*src="([^"]+)"', (ROOT / "index.html").read_text(encoding="utf-8"))]
+    pos = {Path(x).name: i for i, x in enumerate(srcs)}
+    bad = []
+    for f, deps in LOAD_AFTER.items():
+        if f not in pos:
+            bad.append(f"{f} 가 index.html 에 없음"); continue
+        for d in deps:
+            if d not in pos or pos[d] > pos[f]:
+                bad.append(f"{f} 는 {d} 뒤에 와야 함")
+    addons = [p.name for p in ROOT.glob("*.js") if p.name not in ("app.js", "data.js", "jszip.min.js", "blockly_msgs.js")]
+    for a in addons:
+        if a not in pos:
+            bad.append(f"{a} 를 index.html 이 불러오지 않음")
+    check(not bad, "; ".join(bad))
+    return f"스크립트 {len(srcs)}개"
+
+
+@test("app-hooks-patched")
+async def t_hooks(env):
+    """tools/patch_cadx.py · patch_trx.py 의 훅이 app.js 에 모두 들어 있는지 (다시 돌려도 바뀌는 게 없어야 함)."""
+    tmp = Path(tempfile.mkdtemp(prefix="hooks-"))
+    try:
+        cp = tmp / "app.js"; shutil.copy(ROOT / "app.js", cp)
+        for tool in ("patch_cadx.py", "patch_trx.py"):
+            r = subprocess.run([sys.executable, str(ROOT / "tools" / tool), str(cp)], capture_output=True, text=True)
+            check(r.returncode == 0, f"{tool} 실패 — app.js 가 바뀌어 훅 자리를 못 찾음: {(r.stdout + r.stderr).strip()[-200:]}")
+            check(cp.read_bytes() == (ROOT / "app.js").read_bytes(), f"{tool} 를 돌리니 app.js 가 바뀜 — 훅이 빠져 있음. `python3 tools/{tool} app.js` 를 돌리세요")
+        return "patch_cadx 17개 · patch_trx 12개 모두 들어 있음"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@test("app-contract")
+async def t_contract(env):
+    """덧붙임 파일들이 쓰는 app.js 의 함수·값과, 덧붙임 파일들이 서로 주고받는 전역이 모두 있는지."""
+    pg = await env.page()
+    try:
+        await pg.wait_for_timeout(1500)
+        miss = await pg.evaluate("""([C, G]) => { const out = [];
+          for (const [path, names] of Object.entries(C)) { const o = path.split('.').slice(1).reduce((a, k) => a && a[k], window);
+            if (!o) { out.push(path + ' (없음)'); continue; } for (const n of names.split(' ')) if (!(n in o)) out.push(path + '.' + n); }
+          for (const g of G) if (!(g in window)) out.push('window.' + g); return out; }""", [CONTRACT, ADDON_GLOBALS])
+        check(not miss, "없어진 연결 고리: " + ", ".join(miss))
+        return f"{sum(len(v.split()) for v in CONTRACT.values())}개 + 전역 {len(ADDON_GLOBALS)}개"
+    finally:
+        await env.close(pg)
+
+
 # ───────────────────────── 전체 테스트 (--full) ─────────────────────────
 DEMO_JS = r"""([task, col]) => new Promise(res => {
   const keys = window.__bc.keys, isT = (r,g,b) => col === 'red' ? (r>150&&g<100&&b<100) : (b>150&&r<100&&g<170);
