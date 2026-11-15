@@ -22,7 +22,12 @@
     'PC 도우미 두뇌는 속을 볼 수 없어요. VLA 두뇌를 "내가 가르친 모델"로 바꾸세요.': 'The PC helper brain cannot be looked inside. Switch the VLA brain to "Model I taught".',
     '지시': 'instruction', '처음 듣는 낱말': 'unknown word', '배운 낱말': 'known word',
   };
-  const KO = { loop: '0.1초마다 AI가 ① 보기 → ② 듣기 → ③ 생각 → ④ 고르기 → ⑤ 움직이기를 한 번씩 합니다.' };
+ EN['숨은 칸'] = 'Hidden cell'; EN['가장 좋아하는 그림 (가중치)'] = 'favourite picture (weights)'; EN['지금 이 칸'] = 'This cell now';
+  EN['(켜짐 — 지금 그림이 좋아하는 그림과 닮음)'] = '(on — the picture now looks like its favourite)'; EN['(꺼짐 — 반대 모양)'] = '(off — opposite pattern)'; EN['(거의 꺼짐)'] = '(nearly off)';
+  EN['이 칸이 켜지면 → 행동 점수에 더해지는 양 (가중치)'] = 'When this cell is on → amount added to each action score (weights)';
+  EN['cell.hint'] = '③ Click a hidden cell to see its weights — the picture it likes most and how it pushes each action.';
+  EN['cell.tip'] = 'Each pixel colour is a weight: where the picture looks like this, the cell turns on (grey = 0).';
+  const KO = { 'cell.hint': '③ 숨은 칸 동그라미를 누르면 그 칸의 가중치를 볼 수 있어요 — 가장 좋아하는 그림과, 켜지면 어떤 행동을 밀어 주는지.', 'cell.tip': '그림의 칸·색 하나하나가 가중치예요. 지금 보는 장면이 이 그림과 닮을수록 이 칸이 켜져요 (회색 = 0).', loop: '0.1초마다 AI가 ① 보기 → ② 듣기 → ③ 생각 → ④ 고르기 → ⑤ 움직이기를 한 번씩 합니다.' };
   const t = k => ((document.documentElement.lang || 'ko').slice(0, 2) === 'ko' ? (KO[k] || k) : (EN[k] || BC.t(k)));
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const store = V.store;
@@ -32,9 +37,12 @@
 #vlaViz .hd{display:flex;align-items:center;gap:10px;cursor:move;user-select:none;margin-bottom:4px}#vlaViz .hd b{font-size:14px}#vlaViz .hd .sp{flex:1}
 #vlaViz canvas{width:100%;display:block;border-radius:8px;background:rgba(127,127,127,.06)}#vlaViz .cf{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center}
 #vlaViz .chip{border:1px solid rgba(127,127,127,.35);border-radius:999px;padding:2px 9px}#vlaViz .chip.now{border-color:#7E57C2;background:rgba(126,87,194,.14);font-weight:600}
+#vlaViz .cell{display:flex;gap:10px;align-items:flex-start;margin-top:6px;padding:6px 8px;border-radius:8px;background:rgba(126,87,194,.07)}#vlaViz .cell canvas{width:144px;height:108px;image-rendering:pixelated;border-radius:6px;flex:none;cursor:default;background:#888}
+#vlaViz .cell .eff{display:grid;grid-template-columns:auto 120px auto;gap:2px 6px;align-items:center;font-size:11px}#vlaViz .cell .eff i{display:block;height:9px;border-radius:3px}
 #vlaViz .ft{margin-top:6px;opacity:.75;line-height:1.5}#vlaViz .warn{background:rgba(249,168,37,.15);border-radius:6px;padding:4px 8px;margin-top:6px}`;
   document.head.appendChild(css);
 
+  let selCell = -1, cellSig = '';
   let win = null, cv = null, raf = 0, last = null, lastTick = -1, tickAt = 0, lastIdle = 0;
   const W = 820, H = 330;
   const wsTask = () => {
@@ -44,9 +52,12 @@
   const open = () => {
     if (!win) {
       win = document.createElement('div'); win.id = 'vlaViz';
-      win.innerHTML = `<div class="hd"><b></b><span class="st"></span><span class="sp"></span><label><input type="checkbox" class="sal"> <span class="salL"></span></label><button class="x">✕</button></div><canvas width="${W * 2}" height="${H * 2}"></canvas><div class="cf"></div><div class="msg"></div><div class="ft"></div>`;
+      win.innerHTML = `<div class="hd"><b></b><span class="st"></span><span class="sp"></span><label><input type="checkbox" class="sal"> <span class="salL"></span></label><button class="x">✕</button></div><canvas width="${W * 2}" height="${H * 2}"></canvas><div class="cell"></div><div class="cf"></div><div class="msg"></div><div class="ft"></div>`;
       document.body.appendChild(win);
       cv = win.querySelector('canvas');
+      cv.style.cursor = 'pointer';
+      cv.onclick = e => { const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
+        for (let k = 0; k < 24; k++) { const cx = 300 + (k % 4) * 36, cy = 56 + Math.floor(k / 4) * 40; if ((x - cx) ** 2 + (y - cy) ** 2 < 17 * 17) { selCell = selCell === k ? -1 : k; cellSig = ''; return; } } };
       win.querySelector('.x').onclick = () => { win.hidden = true; cancelAnimationFrame(raf); };
       const sal = win.querySelector('.sal'); sal.checked = store('mscad.vlaviz.sal') !== '0'; sal.onchange = () => store('mscad.vlaviz.sal', sal.checked ? '1' : '0');
       // 끌어서 옮기기
@@ -121,7 +132,8 @@
     for (let k = 0; k < 24; k++) {
       const col = k % 4, row = Math.floor(k / 4), x = 300 + col * 36, y = 56 + row * 40, v = I ? I.h[k] : 0;
       g.fillStyle = v >= 0 ? `rgba(245,124,0,${(Math.abs(v) * .9 + .05).toFixed(3)})` : `rgba(30,136,229,${(Math.abs(v) * .9 + .05).toFixed(3)})`;
-      g.beginPath(); g.arc(x, y, 14, 0, 7); g.fill(); g.strokeStyle = 'rgba(127,127,127,.4)'; g.stroke();
+      g.beginPath(); g.arc(x, y, 14, 0, 7); g.fill(); g.strokeStyle = k === selCell ? '#7E57C2' : 'rgba(127,127,127,.4)'; g.lineWidth = k === selCell ? 3 : 1; g.stroke(); g.lineWidth = 1;
+      g.fillStyle = 'rgba(0,0,0,.55)'; g.font = '10px sans-serif'; g.textAlign = 'center'; g.fillText(String(k + 1), x, y + 3.5); g.textAlign = 'left';
     }
     g.font = '11px sans-serif'; g.fillStyle = '#F57C00'; g.fillText(`● ${t('켜짐 +')}`, 276, 310); g.fillStyle = '#1E88E5'; g.fillText(`● ${t('꺼짐 −')}`, 352, 310);
     // ④ 고르기
@@ -160,6 +172,20 @@
     if (cf.dataset.sig !== sig) {
       cf.dataset.sig = sig;
       cf.innerHTML = I && I.cf.length ? `<span>${t('💬 만약 다른 말을 들었다면?')}</span>` + I.cf.map(c => `<span class="chip${c.task === D.task ? ' now' : ''}">“${esc(c.task)}” → ${BC.AICON[c.a]} ${esc(BC.t(BC.ANAME[c.a]))} ${Math.round(c.p * 100)}%${c.task === D.task ? ` · ${t('지금 들은 말')}` : ''}</span>`).join('') : '';
+    }
+    // 고른 숨은 칸: 가장 좋아하는 그림(가중치) + 그 칸이 켜지면 행동 점수에 더해지는 양(지금 지시 기준)
+    const cell = win.querySelector('.cell');
+    if (selCell < 0 || !I || !B.model) { if (cell.dataset.on !== '0') { cell.dataset.on = '0'; cell.innerHTML = `<span style="opacity:.75">${t('cell.hint')}</span>`; } }
+    else {
+      const sig2 = JSON.stringify([selCell, B.model.at, D.task]);
+      if (cellSig !== sig2) {
+        cellSig = sig2; cell.dataset.on = '1';
+        cell.innerHTML = `<canvas width="${EW}" height="${EH}"></canvas><div><b>${t('숨은 칸')} ${selCell + 1} — ${t('가장 좋아하는 그림 (가중치)')}</b><div style="opacity:.8;margin:2px 0 4px">${t('cell.tip')}</div><div class="nowv"></div><div class="eff"></div></div>`;
+        cell.querySelector('canvas').getContext('2d').putImageData(new ImageData(BC.prefImg(B.model, selCell), EW, EH), 0, 0);
+      }
+      const v = I.h[selCell], eff = BC.ANAME.map((n, k) => I.Wk[k * BC.NH + selCell]), mx = Math.max(1e-9, ...eff.map(Math.abs));
+      cell.querySelector('.nowv').innerHTML = `${t('지금 이 칸')}: <b style="color:${v >= 0 ? '#F57C00' : '#1E88E5'}">${v >= 0 ? '+' : ''}${v.toFixed(2)}</b> ${v > .3 ? t('(켜짐 — 지금 그림이 좋아하는 그림과 닮음)') : v < -.3 ? t('(꺼짐 — 반대 모양)') : t('(거의 꺼짐)')}`;
+      cell.querySelector('.eff').innerHTML = `<span style="grid-column:1/4;opacity:.8">${t('이 칸이 켜지면 → 행동 점수에 더해지는 양 (가중치)')}</span>` + eff.map((e, k) => `<span>${BC.AICON[k]} ${esc(BC.t(BC.ANAME[k]))}</span><span><i style="width:${Math.round(Math.abs(e) / mx * 100)}%;background:${e >= 0 ? '#F57C00' : '#1E88E5'}"></i></span><span>${e >= 0 ? '+' : '−'}${Math.abs(e).toFixed(2)}</span>`).join('');
     }
     const msg = V.brain() === 'helper' ? t('PC 도우미 두뇌는 속을 볼 수 없어요. VLA 두뇌를 "내가 가르친 모델"로 바꾸세요.') : !B.model ? t('아직 가르친 모델이 없어요 — 학습 창에서 먼저 학습시키세요') : D && D.teach ? t('가르치는 중: ✔ = 내가 누른 키, 막대 = AI라면 고를 행동') : '';
     const m = win.querySelector('.msg'); m.className = msg ? 'msg warn' : 'msg'; m.textContent = msg;

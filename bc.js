@@ -29,11 +29,13 @@
     '시범이 너무 적어요 (최소 30장면)': 'Too few scenes (at least 30)', '장면을 모으는 중': 'collecting scenes', '이번에 모은 장면': 'scenes this run',
     '학습 끝': 'Training done', '🔍 AI 속 들여다보기': '🔍 Look inside the AI', 'AI 카메라': 'AI camera', '1인칭 (로봇 눈)': '1st person (robot eye)', '3인칭 (뒤에서 따라가기)': '3rd person (follows from behind)', '위에서 (천장 카메라)': 'Top (ceiling camera)', '카메라': 'Camera',
     '이 모델은 이 카메라로 배웠어요': 'This model learned with this camera', '카메라를 바꾸거나 다시 학습하세요': 'switch the camera or train again',
+    'wgt.tip': 'Weight pictures — the "favourite picture" of each of the 24 hidden cells (mid grey = 0, brighter or stronger colour = bigger weight). They start as random noise and take on shapes such as target colours and lines while learning.',
     'cam.tip': 'The camera decides what the AI sees. Scenes and models are kept separately for each camera — teach and train again after switching.', '파일을 열 수 없습니다': 'Cannot open the file', '닫기': 'Close',
   };
   const KO = {
     'teach.tip': '실행하고 키보드로 운전하세요 (↑ ← →, 스페이스 = 여기서 멈춤). 0.1초마다 카메라 그림 + 이 지시 + 누른 키가 한 장면으로 모입니다.',
     'keys': '키: ↑ 앞으로 · ← → 제자리 돌기 · ↑+←/→ 앞으로 가며 돌기 · 스페이스 = "여기서 멈춰"(도착). 키를 누르고 있을 때만 장면이 모입니다.',
+    'wgt.tip': '가중치 그림 — 숨은 칸 24개가 각각 "가장 좋아하는 그림"입니다 (가운데 회색 = 0, 밝거나 색이 진할수록 큰 가중치). 학습 전에는 지글지글한 무작위 그림이었다가, 배우면서 목표 색·선 같은 모양이 생깁니다.',
     'cam.tip': 'AI 카메라가 AI가 보는 그림을 정합니다. 장면과 모델은 카메라마다 따로입니다 — 카메라를 바꾸면 다시 가르치고 학습하세요.',
     'run.help': '「👁️ VLA로 주행」 블록을 「프로그램 시작할 때」 아래에 붙이고, 가르친 것과 같은 지시를 쓰고, 두뇌를 "내가 가르친 모델"로 고른 뒤 ▶ 실행.',
   };
@@ -115,7 +117,23 @@
     for (let j = 0; j < NH; j++) { const g = f.Wk[a * NH + j] * (1 - f.h[j] * f.h[j]); if (!g) continue; const o = j * NIN; for (let i = 0; i < NI; i++) G[i] += g * m.W1[o + i]; }
     const sal = new Float32Array(EW * EH); for (let k = 0; k < EW * EH; k++) sal[k] = Math.abs(G[k * 3]) + Math.abs(G[k * 3 + 1]) + Math.abs(G[k * 3 + 2]);
     const cf = (m.tasks || []).map(tk => { const q = forward(m, feat(img, tk, th)).p; let b = 0; for (let k = 1; k < NA; k++) if (q[k] > q[b]) b = k; return { task: tk, a: b, p: q[b] }; });
-    return { h: f.h, p: f.p, a, sal, cf, words: words(task).map(w => ({ w, known: (m.vocab || []).includes(w) })) };
+    return { h: f.h, p: f.p, a, sal, cf, Wk: f.Wk, words: words(task).map(w => ({ w, known: (m.vocab || []).includes(w) })) };
+  };
+  // 숨은 칸 j 가 "가장 좋아하는 그림": 그림 칸·색마다 가중치 부호와 크기 (주황·밝음 = +, 어두움 = −). 128 = 0, 칸마다 가장 큰 값으로 나눔
+  //   gmax 를 주면 모든 칸이 같은 잣대(약한 칸은 회색에 가깝게) — 학습 창 가중치 그림
+  const prefImg = (m, j, gmax) => {
+    const o = j * NIN; let mx = 1e-9; if (gmax) mx = gmax; else for (let i = 0; i < NI; i++) { const v = Math.abs(m.W1[o + i]); if (v > mx) mx = v; }
+    const out = new Uint8ClampedArray(EW * EH * 4);
+    for (let k = 0; k < EW * EH; k++) { for (let c = 0; c < 3; c++) out[k * 4 + c] = 128 + 127 * Math.max(-1, Math.min(1, m.W1[o + k * 3 + c] / mx)); out[k * 4 + 3] = 255; }
+    return out;
+  };
+  const drawWeights = (cv, m) => {
+    if (!cv) return; const g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height); if (!m) return;
+    const cols = 8, cw = Math.floor((cv.width - (cols - 1) * 4) / cols), ch = Math.round(cw * EH / EW), tmp = document.createElement('canvas'); tmp.width = EW; tmp.height = EH;
+    g.imageSmoothingEnabled = false;
+    const all = []; for (let j = 0; j < NH; j++) for (let i = 0; i < NI; i++) all.push(Math.abs(m.W1[j * NIN + i]));
+    all.sort((a, b) => a - b); const gmax = Math.max(1e-9, all[Math.floor(all.length * .99)]);
+    for (let j = 0; j < NH; j++) { tmp.getContext('2d').putImageData(new ImageData(prefImg(m, j, gmax), EW, EH), 0, 0); const x = (j % cols) * (cw + 4), y = Math.floor(j / cols) * (ch + 14); g.drawImage(tmp, x, y + 12, cw, ch); g.fillStyle = 'rgba(127,127,127,.9)'; g.font = '10px sans-serif'; g.fillText(String(j + 1), x, y + 10); }
   };
 
   // 학습 (Adam, 묶음 32, 클래스 균형 가중치, 20% 는 "처음 보는 장면"으로 남김)
@@ -136,7 +154,7 @@
     const G = P.map(a => new Float32Array(a.length));
     const lr = 0.003, b1 = 0.9, b2 = 0.999, eps = 1e-8, BS = 32; let step = 0;
     const acc = set => { let ok = 0; for (const d of set) { const p = forward(m, d.x).p; let best = 0; for (let k = 1; k < NA; k++) if (p[k] > p[best]) best = k; if (best === d.a) ok++; } return set.length ? ok / set.length : 0; };
-    const hist = [{ r: 0, tr: acc(tr), va: acc(vx) }]; onRound && onRound(hist[0], hist); // 0번째 = 배우기 전 (거의 찍기)
+    const hist = [{ r: 0, tr: acc(tr), va: acc(vx) }]; onRound && onRound(hist[0], hist, m); // 0번째 = 배우기 전 (거의 찍기)
     for (let r = 0; r < rounds; r++) {
       if (!B.training) break;
       for (let i = tr.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [tr[i], tr[j]] = [tr[j], tr[i]]; }
@@ -161,7 +179,7 @@
         const c1 = 1 - Math.pow(b1, step), c2 = 1 - Math.pow(b2, step);
         for (let q = 0; q < P.length; q++) { const p = P[q], g = G[q], a1 = M1[q], a2 = M2[q]; for (let i = 0; i < p.length; i++) { const gi = g[i] + (q === 0 || q === 2 ? 1e-4 * p[i] : 0); a1[i] = b1 * a1[i] + (1 - b1) * gi; a2[i] = b2 * a2[i] + (1 - b2) * gi * gi; p[i] -= lr * (a1[i] / c1) / (Math.sqrt(a2[i] / c2) + eps); } }
       }
-      const h = { r: r + 1, tr: acc(tr), va: acc(vx) }; hist.push(h); onRound && onRound(h, hist);
+      const h = { r: r + 1, tr: acc(tr), va: acc(vx) }; hist.push(h); onRound && onRound(h, hist, m);
       await new Promise(res => setTimeout(res, 0));
     }
     const tasks = [...new Set(all.map(d => d.task))];
@@ -213,7 +231,7 @@
       await api.wait(0.1);
     }
   };
-  window.__bc = { teach, drive, state: B, eye, predict, inspect, ACT, ANAME, AICON, EW, EH, NH, t, words, keys: B.keys, train: async r => { B.training = true; try { B.model = await train(r || 40); await saveModel(); return B.model.acc; } finally { B.training = false; draw(true); } } };
+  window.__bc = { teach, drive, state: B, eye, predict, inspect, prefImg, NIN, NI, ACT, ANAME, AICON, EW, EH, NH, t, words, keys: B.keys, train: async r => { B.training = true; try { B.model = await train(r || 40); await saveModel(); return B.model.acc; } finally { B.training = false; draw(true); } } };
 
   // ───────── 블록 「🎮 운전해서 가르치기 · 지시: …」 ─────────
   Bly.Blocks.rm_vla_teach = {
@@ -324,9 +342,11 @@ ${rows ? `<table><tr><th>${t('카메라')}</th><th>${t('지시')}</th><th>${t('�
 <div class="row">${t('가르치는 횟수')}: <select id="bcRounds">${[20, 40, 80].map(n => `<option ${n === rounds ? 'selected' : ''}>${n}</option>`).join('')}</select>
 <button id="bcTrain">${B.training ? t('■ 멈추기') : t('▶ 학습 시작')}</button><span id="bcProg"></span></div>
 <canvas class="chart"></canvas>
+<div class="note">${t('wgt.tip')}</div><canvas class="wgt" width="440" height="160" style="width:100%;max-width:440px;image-rendering:pixelated"></canvas>
 <div class="note" id="bcRes">${m && m.acc ? `${t('학습 끝')} · ${CAMI[m.cam] || ''} ${t('연습 문제')} ${Math.round(m.acc.tr * 100)}% · ${t('처음 보는 장면')} ${Math.round(m.acc.va * 100)}% · ${m.n} ${t('장면')} · ${esc(m.tasks.join(' / '))}` : t('모델 없음')}</div>
 <h4>${t('③ 달리게 하기')}</h4><div class="note">${t('run.help')}</div>`;
     drawChart(dlg.querySelector('canvas.chart'), (m && m.hist) || []);
+    drawWeights(dlg.querySelector('canvas.wgt'), m);
     dlg.querySelector('#bcX').onclick = () => { dlg.hidden = true; };
     dlg.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { const k = b.dataset.del; B.data = B.data.filter(d => ((d.cam || 'first') + '\u0001' + d.task) !== k); saveData(); drawDlg(); draw(true); });
     dlg.querySelector('#bcClear').onclick = () => { if (!confirm(t('정말 모든 시범과 모델을 지울까요?'))) return; B.data = []; B.model = null; saveData(); saveModel(); drawDlg(); draw(true); };
@@ -353,7 +373,7 @@ ${rows ? `<table><tr><th>${t('카메라')}</th><th>${t('지시')}</th><th>${t('�
       const prog = dlg.querySelector('#bcProg'), cv = dlg.querySelector('canvas.chart'), n = +dlg.querySelector('#bcRounds').value;
       B.training = true; drawDlg();
       try {
-        const m2 = await train(n, (h, hist) => { const p = dlg.querySelector('#bcProg'); if (p) p.textContent = `${t('학습 중…')} ${h.r}/${n} · ${t('연습 문제')} ${Math.round(h.tr * 100)}% · ${t('처음 보는 장면')} ${Math.round(h.va * 100)}%`; drawChart(dlg.querySelector('canvas.chart'), hist); });
+        const m2 = await train(n, (h, hist, mm) => { const p = dlg.querySelector('#bcProg'); if (p) p.textContent = `${t('학습 중…')} ${h.r}/${n} · ${t('연습 문제')} ${Math.round(h.tr * 100)}% · ${t('처음 보는 장면')} ${Math.round(h.va * 100)}%`; drawChart(dlg.querySelector('canvas.chart'), hist); drawWeights(dlg.querySelector('canvas.wgt'), mm); });
         B.model = m2; await saveModel();
       } catch (e) { alert(e.message || e); }
       B.training = false; drawDlg(); draw(true); void prog; void cv;

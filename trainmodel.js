@@ -39,6 +39,7 @@
     '입력 {0} · 숨은 층 {1} · 가중치 {2}개': ['inputs {0} · hidden {1} · {2} weights', '入力 {0} · 隠れ層 {1} · 重み {2} 個', '输入 {0} · 隐藏层 {1} · 权重 {2} 个', 'entradas {0} · ocultas {1} · {2} pesos'],
     'nn.tip': ['Repeats forever: reads the sensors, the trained neural network computes speed and turn, and the robot drives. Made by "Auto-tuning training → 🧠 Neural network".', 'ずっとくり返し：センサーを読み、学習したニューラルネットが速度と回転を計算して走ります。「自動チューニング学習 → 🧠 ニューラルネットワーク」で作ります。', '一直重复：读取传感器，训练好的神经网络计算速度和转向并行驶。在“自动调参训练 → 🧠 神经网络”中生成。', 'Repite siempre: lee los sensores, la red entrenada calcula velocidad y giro y el robot avanza. Se crea en "Entrenamiento → 🧠 Red neuronal".'],
     '신경망 블록을 넣었습니다': ['Added the neural network block', 'ニューラルネットのブロックを入れました', '已加入神经网络积木', 'Bloque de red neuronal añadido'],
+    '🔍 신경망 들여다보기 (가중치 보기)': ['🔍 Look inside the network (weights)', '🔍 ネットワークの中を見る (重み)', '🔍 查看神经网络内部 (权重)', '🔍 Ver dentro de la red (pesos)'],
     '학습 모델: {0}': ['Learning model: {0}', '学習モデル: {0}', '学习模型: {0}', 'Modelo: {0}'],
   };
   const KO_TIP = '계속 반복: 센서를 읽고, 학습한 신경망이 속도와 회전을 계산해 주행합니다. 「자동 튜닝 학습 → 🧠 신경망」으로 만듭니다.';
@@ -130,16 +131,16 @@
     try { JG.forBlock.rm_drive_stop(fake({}), JG); } catch (e) { } // registers the drive base like the drive blocks do
     return `{ const __net = ${netExpr};\nwhile (true) {\n  const __o = window.__nnF(__net, [${ins.map(jsIn).join(', ')}]);\n  await api.wbDrive(__o[0], __o[1]);\n  await api.wait(0.02);\n} }\n`;
   };
-  let lastNN = null, nnBest = null, trainedNN = false;
+  let lastNN = null, nnBest = null, trainedNN = false, nnGen = 0;
   function nnSpec(task) {
     const ins = nnIn(); if (!ins.length) return t('로봇에 컬러 센서나 거리 센서가 없어 신경망을 쓸 수 없습니다');
     const n = nW(ins.length), S = 300, T = 180;
     const src = loopJS(`{ W: P, S: ${S}, T: ${T} }`, ins);
     const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
     const fn = new AsyncFunction('api', 'P', src);
-    lastNN = { ins, S, T }; nnBest = null; trainedNN = true;
+    lastNN = { ins, S, T }; nnBest = null; trainedNN = true; nnGen = 0;
     const dims = Array.from({ length: n }, () => ({ m0: 0, sd0: 1, q: v => Math.round(Math.max(-8, Math.min(8, v)) * 1000) / 1000 }));
-    return { N: 16, dims, fn, nn: true, onBest(P) { nnBest = P.slice(); drawNet(); } };
+    return { N: 16, dims, fn, nn: true, onBest(P) { nnBest = P.slice(); nnGen++; drawNet(); try { window.dispatchEvent(new CustomEvent('mscad:nnbest')); } catch (e) { } } };
   }
   // ───────────── 「🧠 신경망으로 주행」 블록 ─────────────
   const inLabel = ins => ins.map(x => (x.k === 'color' ? t('컬러 {0} 반사광', x.p) : t('거리 {0}', x.p))).join(', ');
@@ -214,7 +215,7 @@
       info.style.display = nn ? '' : 'none';
       if (nn) {
         const ins = nnIn();
-        info.innerHTML = ins.length ? `<div>${esc(t('신경망 구조: 입력 {0}개 ({1}) → 숨은 층 {2}개 → 출력 2개 (속도·회전) · 가중치 {3}개', ins.length, inLabel(ins), H, nW(ins.length)))}</div><canvas id="trNnCanvas" width="300" height="150"></canvas><div style="color:var(--muted);margin-top:2px">${esc(t('"적용"을 누르면 지금 프로그램 대신 「🧠 신경망으로 주행」 블록이 들어갑니다 (지금 프로그램은 🕘 기록에 남습니다).'))}</div>`
+        info.innerHTML = ins.length ? `<div>${esc(t('신경망 구조: 입력 {0}개 ({1}) → 숨은 층 {2}개 → 출력 2개 (속도·회전) · 가중치 {3}개', ins.length, inLabel(ins), H, nW(ins.length)))}</div><canvas id="trNnCanvas" width="300" height="150"></canvas><div><button type="button" id="trNnViz" style="margin-top:4px">${esc(t('🔍 신경망 들여다보기 (가중치 보기)'))}</button></div><div style="color:var(--muted);margin-top:2px">${esc(t('"적용"을 누르면 지금 프로그램 대신 「🧠 신경망으로 주행」 블록이 들어갑니다 (지금 프로그램은 🕘 기록에 남습니다).'))}</div>`
           : `<div style="color:#c62828">${esc(t('로봇에 컬러 센서나 거리 센서가 없어 신경망을 쓸 수 없습니다'))}</div>`;
         if (lastNN && JSON.stringify(lastNN.ins) !== JSON.stringify(ins)) { lastNN = null; nnBest = null; }
         if (!lastNN && ins.length) lastNN = { ins, S: 300, T: 180 };
@@ -245,5 +246,7 @@
     if (e.target.closest('#trStop')) setTimeout(paint, 300);
   }, true);
   if (!JG || !PY) console.warn('trainmodel: block generators not found');
-  window.__trainModel = { get model() { return model; }, set: setModel, nnF: window.__nnF };
+  // nnviz.js(신경망 들여다보기)가 읽는 값: 학습 중 가장 좋은 신경망, 입력 이름
+  window.__trainModel = { get model() { return model; }, set: setModel, nnF: window.__nnF, H,
+    get nn() { return lastNN ? { ins: lastNN.ins, S: lastNN.S, T: lastNN.T, W: nnBest, gen: nnGen, H } : null; }, inLabel };
 })();
