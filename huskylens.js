@@ -25,6 +25,8 @@
     '초록': ['green', '緑', '绿', 'verde'], '하늘': ['azure', '水色', '天蓝', 'celeste'], '파랑': ['blue', '青', '蓝', 'azul'], '보라': ['violet', '紫', '紫', 'violeta'],
     '안 보임': ['nothing', '見えない', '未检测', 'nada'],
     '선': ['line', 'ライン', '线', 'línea'],
+    '🔍 선명한 화면': ['🔍 Sharp view', '🔍 くっきり表示', '🔍 清晰画面', '🔍 Vista nítida'],
+    '카메라 화면을 크게·부드럽게 그립니다(사람이 보는 용). 인식은 지금처럼 작은 그림을 씁니다. 느린 컴퓨터에서는 끄세요.': ['Draws the camera view larger and smoother for people. Recognition still uses the small camera image. Turn off on slow computers.', 'カメラ画面を大きく滑らかに描きます（人が見る用）。認識は今までどおり小さい画像を使います。遅いパソコンでは外してください。', '把相机画面画得更大更平滑（给人看）。识别仍使用原来的小图像。电脑慢时请关闭。', 'Dibuja la vista más grande y suave (para personas). El reconocimiento sigue usando la imagen pequeña. Desactívalo en equipos lentos.'],
     '카메라 화면 (320×240). 색 인식은 학습한 색 중 가장 큰 덩어리 하나, 라인 추적은 검은 선의 화살표를 보냅니다.': ['Camera view (320×240). Color recognition sends the largest blob of a learned color; line tracking sends the arrow of the black line.', 'カメラ画面 (320×240)。色認識は学習した色の一番大きい塊、ライン追跡は黒い線の矢印を送ります。', '相机画面（320×240）。颜色识别发送已学颜色中最大的色块，巡线发送黑线的箭头。', 'Vista de cámara (320×240). El color envía la mancha más grande de un color aprendido; la línea envía la flecha de la línea negra.'],
   };
   const t = ko => { const i = LIX[(document.documentElement.lang || 'ko').slice(0, 2)]; return (i != null && TR[ko] && TR[ko][i]) || ko; };
@@ -243,20 +245,76 @@ ${[-40, -20, 0, 20, 40].map(x => `1 0 ${x} 10.05 0 6 0 0 0 1 0 0 0 6 4-4disc.dat
       if (t1 < 0) return null; const tt = Math.max(t0, 0);
       return { t: tt, front: o[2] + d[2] * tt > RB.front };
     };
+    // opt.ss: 한 칸을 ss×ss 번 쏘아 평균 (슈퍼샘플링 — 화면용으로 가장자리가 부드러워짐, AI 입력은 ss=1 그대로)
+    const ss = Math.max(1, Math.min(4, opt.ss | 0 || 1)), n = ss * ss;
     const img = new Uint8ClampedArray(w * h * 4), D = new T3.Vector3();
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-      D.copy(F).addScaledVector(right, ((i + .5) / w * 2 - 1) * th).addScaledVector(up, (1 - (j + .5) / h * 2) * tv).normalize();
-      const hit = shoot(O, D); let c = hit.c;
-      if (RB) { const r = hitRobot(D); if (r) { const tg = D.y < -1e-6 ? -O.y / D.y : Infinity; if (r.t < tg || hit.none) c = r.front ? [255, 196, 0] : [126, 87, 194]; } }
-      const k = (j * w + i) * 4; img[k] = c[0]; img[k + 1] = c[1]; img[k + 2] = c[2]; img[k + 3] = 255;
+      let r0 = 0, g0 = 0, b0 = 0;
+      for (let sj = 0; sj < ss; sj++) for (let si = 0; si < ss; si++) {
+        D.copy(F).addScaledVector(right, ((i + (si + .5) / ss) / w * 2 - 1) * th).addScaledVector(up, (1 - (j + (sj + .5) / ss) / h * 2) * tv).normalize();
+        const hit = shoot(O, D); let c = hit.c;
+        if (RB) { const r = hitRobot(D); if (r) { const tg = D.y < -1e-6 ? -O.y / D.y : Infinity; if (r.t < tg || hit.none) c = r.front ? [255, 196, 0] : [126, 87, 194]; } }
+        r0 += c[0]; g0 += c[1]; b0 += c[2];
+      }
+      const k = (j * w + i) * 4; img[k] = r0 / n; img[k + 1] = g0 / n; img[k + 2] = b0 / n; img[k + 3] = 255;
     }
     return { w, h, img };
+  };
+
+  // ───────── 화면용 선명한 카메라 그림 (보기 전용 — 인식·AI 입력에는 쓰지 않음) ─────────
+  //   인식은 64×48(허스키)·96×72(AI 카메라) 그대로 두고, 사람이 보는 칸만 크게·부드럽게 다시 그림.
+  //   컴퓨터가 느리면 스스로 단계를 낮춤 (한 장에 35ms 넘으면 ↓, 12ms 안쪽이면 ↑).
+  const HQ = [{ w: 96, h: 72, ss: 1 }, { w: 160, h: 120, ss: 1 }, { w: 160, h: 120, ss: 2 }, { w: 320, h: 240, ss: 1 }, { w: 320, h: 240, ss: 2 }];
+  const hqState = { lv: 2, ms: 0 };
+  const hqOn = () => { try { return localStorage.getItem('mscad.cam.hq') !== '0'; } catch (e) { return true; } };
+  const hqLevel = () => HQ[hqOn() ? hqState.lv : 0];
+  const hqTime = ms => {
+    hqState.ms = hqState.ms ? hqState.ms * .7 + ms * .3 : ms;
+    if (hqState.ms > 35 && hqState.lv > 1) { hqState.lv--; hqState.ms = 0; }
+    else if (hqState.ms < 12 && hqState.lv < HQ.length - 1) { hqState.lv++; hqState.ms = 0; }
+  };
+  // fn(w, h, ss) → { w, h, img } 를 지금 단계로 찍고 걸린 시간으로 단계를 맞춤
+  const hqShot = fn => {
+    const L = hqLevel(), t0 = performance.now(), r = fn(L.w, L.h, L.ss);
+    if (hqOn()) hqTime(performance.now() - t0);
+    return r;
+  };
+  // 허스키렌즈 카메라 화면 (포트 카메라 · 64×48 인식과 같은 자리·같은 화각)
+  const pvCache = {};
+  const preview = port => {
+    const R = X.robot, cam = camsOf(R)[port]; if (!cam) return null;
+    const P = U.pose(), key = [U.time(), P.x, P.z, P.th, (U.props() || []).length, hqOn(), hqState.lv].join('|');
+    if (pvCache[port] && pvCache[port].key === key) return pvCache[port];
+    const O = toWorld(R, cam.o, false), F = toWorld(R, cam.d, true).normalize();
+    const up0 = Math.abs(F.y) > .95 ? new T3.Vector3(0, 0, 1) : new T3.Vector3(0, 1, 0);
+    const right = new T3.Vector3().crossVectors(F, up0).normalize(), up = new T3.Vector3().crossVectors(right, F).normalize();
+    const th = Math.tan(HF / 2), tv = Math.tan(VF / 2), D = new T3.Vector3();
+    const r = hqShot((w, h, ss) => {
+      const img = new Uint8ClampedArray(w * h * 4), n = ss * ss;
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+        let r0 = 0, g0 = 0, b0 = 0;
+        for (let sj = 0; sj < ss; sj++) for (let si = 0; si < ss; si++) {
+          D.copy(F).addScaledVector(right, ((i + (si + .5) / ss) / w * 2 - 1) * th).addScaledVector(up, (1 - (j + (sj + .5) / ss) / h * 2) * tv).normalize();
+          const c = shoot(O, D).c; r0 += c[0]; g0 += c[1]; b0 += c[2];
+        }
+        const k = (j * w + i) * 4; img[k] = r0 / n; img[k + 1] = g0 / n; img[k + 2] = b0 / n; img[k + 3] = 255;
+      }
+      return { w, h, img };
+    });
+    r.key = key; pvCache[port] = r; return r;
+  };
+  // ImageData 를 캔버스 크기에 맞춰 그림 (크게 찍었으면 부드럽게, 작게 찍었으면 칸이 보이게)
+  const paint = (cv, r) => {
+    const tmp = document.createElement('canvas'); tmp.width = r.w; tmp.height = r.h; tmp.getContext('2d').putImageData(new ImageData(r.img, r.w, r.h), 0, 0);
+    const g = cv.getContext('2d'); g.imageSmoothingEnabled = r.w >= 160; g.imageSmoothingQuality = 'high'; g.drawImage(tmp, 0, 0, cv.width, cv.height);
+    cv.style.imageRendering = r.w >= 160 ? 'auto' : 'pixelated';
+    return g;
   };
 
   // 포트 표(시뮬레이터 오른쪽)에 보이는 값
   window.__husky = {
     renderAt: (port, pose, cf, tag) => render(port, { pose, cfg: cf, tag: tag || ':opp' }),
-    render, view,
+    render, view, preview, paint, hqShot, hqLevel, hqOn, hq: hqState,
     text: port => { const r = render(port); if (!r) return ''; if (!r.id) return t('안 보임'); return r.algo === 'line' ? `${t('선')} ${r.v[0]}→${r.v[1]}` : `ID${r.id} · ${r.v[0]},${r.v[1]} · W${r.v[2]}`; },
   };
 
@@ -278,22 +336,23 @@ ${[-40, -20, 0, 20, 40].map(x => `1 0 ${x} 10.05 0 6 0 0 0 1 0 0 0 6 4-4disc.dat
     if (!ports.length) { if (wrap) wrap.hidden = true; return; }
     if (!wrap || !document.body.contains(wrap)) build(); if (!wrap) return;
     wrap.hidden = false;
-    const c = cfg(), sig = JSON.stringify([ports, c, document.documentElement.lang]);
+    const c = cfg(), sig = JSON.stringify([ports, c, document.documentElement.lang, hqOn()]);
     if (sig !== lastSig) {
       lastSig = sig;
       const opt = (v, txt, sel) => `<option value="${v}"${sel ? ' selected' : ''}>${txt}</option>`;
       wrap.innerHTML = `<div class="label">🔍 ${t('허스키렌즈')} (${ports.join(', ')})</div>
 <div class="row">${t('알고리즘')} <select id="hkAlgo">${opt('color', t('색 인식'), c.algo !== 'line')}${opt('line', t('라인 추적'), c.algo === 'line')}</select></div>
 <div class="row" id="hkIds" ${c.algo === 'line' ? 'hidden' : ''}>${t('학습한 색')} ${[0, 1, 2].map(i => `ID${i + 1} <select data-i="${i}">${opt('', t('없음'), !c.ids[i])}${COLS.map(k => opt(k, t(NAMES[k]), c.ids[i] === k)).join('')}</select>`).join(' ')}</div>
+<div class="row"><label title="${t('카메라 화면을 크게·부드럽게 그립니다(사람이 보는 용). 인식은 지금처럼 작은 그림을 씁니다. 느린 컴퓨터에서는 끄세요.')}"><input type="checkbox" id="hkHq" ${hqOn() ? 'checked' : ''}> ${t('🔍 선명한 화면')}</label></div>
 <canvas width="320" height="240"></canvas><div class="note">${t('카메라 화면 (320×240). 색 인식은 학습한 색 중 가장 큰 덩어리 하나, 라인 추적은 검은 선의 화살표를 보냅니다.')}</div>`;
       cv = wrap.querySelector('canvas');
+      wrap.querySelector('#hkHq').onchange = e => { try { localStorage.setItem('mscad.cam.hq', e.target.checked ? '1' : '0'); } catch (er) { } };
       wrap.querySelector('#hkAlgo').onchange = e => { cfg().algo = e.target.value; for (const k in cache) delete cache[k]; X.apply && C.model.parts[0] && X.apply(C.model.parts[0]); };
       for (const s of wrap.querySelectorAll('#hkIds select')) s.onchange = e => { cfg().ids[+e.target.dataset.i] = e.target.value || null; for (const k in cache) delete cache[k]; X.apply && C.model.parts[0] && X.apply(C.model.parts[0]); };
     }
     // 카메라 화면
     const r = render(ports[0]); if (!r || !cv) return;
-    const g = cv.getContext('2d'), id = new ImageData(r.img, W, H), tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H; tmp.getContext('2d').putImageData(id, 0, 0);
-    g.imageSmoothingEnabled = false; g.drawImage(tmp, 0, 0, 320, 240);
+    const pv = hqOn() ? preview(ports[0]) : null, g = paint(cv, pv || { w: W, h: H, img: r.img });
     g.lineWidth = 3; g.font = 'bold 16px sans-serif';
     if (r.algo === 'line' && r.line) {
       const [a, b] = r.line; g.strokeStyle = '#00e5ff'; g.beginPath(); g.moveTo((a[1] + .5) * 5, (a[0] + .5) * 5); g.lineTo((b[1] + .5) * 5, (b[0] + .5) * 5); g.stroke();

@@ -281,7 +281,7 @@
   const JG = window.javascript && window.javascript.javascriptGenerator, PY = window.python && window.python.pythonGenerator;
   const fake = f => ({ type: 'x', id: 'x', getFieldValue: n => f[n], getInputTargetBlock: () => null, getInput: () => ({}), isEnabled: () => true, getSurroundParent: () => null, getParent: () => null, getRootBlock() { return this; } });
   const genJS = b => { try { JG.forBlock.rm_drive_stop(fake({}), JG); } catch (e) { } return `await window.__bc.teach(api, ${JSON.stringify(String(b.getFieldValue('TASK') || ''))});\n`; };
-  const genPY = () => 'print("Teach-by-driving works only in the simulator")\n';
+  const genPY = b => window.__real ? window.__real.py(PY, 'Teach: ' + String(b.getFieldValue('TASK') || '')) : 'print("Teach-by-driving works only in the simulator")\n';
   const install = () => { if (JG && JG.forBlock.rm_vla_teach !== genJS) JG.forBlock.rm_vla_teach = genJS; if (PY && PY.forBlock.rm_vla_teach !== genPY) PY.forBlock.rm_vla_teach = genPY; };
   install(); setInterval(install, 2000);
 

@@ -5,7 +5,7 @@
 //   · 주행 기록: 켜 두면 프로그램이 실행되는 동안 0.1초마다 카메라 그림 + 로봇이 실제로 움직인 속도·회전을 도우미에 보내
 //     PC 의 recordings/ 폴더에 저장합니다 (VLA 학습 데이터). 어떤 블록 프로그램이든 기록됩니다.
 //   · 연결 주소 ws://127.0.0.1:8765 — 공개 사이트(GitHub Pages)에서 내 PC 로 연결하므로 Chrome 이 "로컬 네트워크" 허용을 묻습니다.
-//   · 실제 허브(Pybricks)에서는 아직 실행하지 않습니다 (파이썬 코드에는 안내 문구만).
+//   · 실제 허브(Pybricks): 파이썬 코드는 시뮬레이터의 바퀴 명령을 받아 움직이는 프로그램입니다 (real.js).
 // app.js · huskylens.js(카메라 그림) 다음에 불러옵니다.
 (() => {
   'use strict';
@@ -119,16 +119,16 @@
     const cx = (bx.min.x + bx.max.x) / 2, a = 30 * Math.PI / 180;
     return { o: new T3.Vector3(cx, bx.max.y + 40, bx.max.z - 10), d: new T3.Vector3(0, -Math.sin(a), Math.cos(a)) };
   };
-  const camView = (w, h) => {
+  const camView = (w, h, ss) => {
     const H = window.__husky; if (!H || !H.view) return null;
     const bx = robotBox(); if (!bx) return null;
     const m = camMode(), cx = (bx.min.x + bx.max.x) / 2;
     if (m === 'third') {
       const o = new T3.Vector3(cx, bx.max.y + 320, bx.min.z - 380), tg = new T3.Vector3(cx, 0, bx.max.z + 300);
-      return H.view({ o, d: tg.sub(o) }, { w, h, fov: 70, robot: bx });
+      return H.view({ o, d: tg.sub(o) }, { w, h, ss, fov: 70, robot: bx });
     }
-    if (m === 'top') return H.view({ o: new T3.Vector3(0, 1800, 0), d: new T3.Vector3(0, -1, 0) }, { w, h, fov: 70, world: true, up: new T3.Vector3(0, 0, -1), robot: bx });
-    return H.view(frontCam(), { w, h, fov: 70 });
+    if (m === 'top') return H.view({ o: new T3.Vector3(0, 1800, 0), d: new T3.Vector3(0, -1, 0) }, { w, h, ss, fov: 70, world: true, up: new T3.Vector3(0, 0, -1), robot: bx });
+    return H.view(frontCam(), { w, h, ss, fov: 70 });
   };
   const snap = () => {
     const r = camView(CW, CH); if (!r) return null;
@@ -205,7 +205,8 @@
     if (PY && PY.forBlock.rm_vla_drive !== genPY) PY.forBlock.rm_vla_drive = genPY;
   };
   const genJS = b => { try { JG.forBlock.rm_drive_stop(fake({}), JG); } catch (e) { } return `await window.__vla.drive(api, ${JSON.stringify(String(b.getFieldValue('TASK') || ''))});\n`; };
-  const genPY = b => `# VLA: ${String(b.getFieldValue('TASK') || '').replace(/\n/g, ' ')}\nprint("VLA driving works only in the simulator for now")\n`;
+  // 허브: 시뮬레이터가 보내는 바퀴 명령을 받아 움직이는 프로그램 (real.js — real2sim 1단계)
+  const genPY = b => window.__real ? window.__real.py(PY, 'VLA: ' + String(b.getFieldValue('TASK') || '')) : `# VLA: ${String(b.getFieldValue('TASK') || '').replace(/\n/g, ' ')}\nprint("VLA driving works only in the simulator for now")\n`;
   install(); setInterval(install, 2000); // 워드블럭 동기화가 생성기를 다시 정의해도 되돌림
   // 도구 상자: "🤖 VLA" 분류
   const prevTb = window.__wbTb;
@@ -243,15 +244,20 @@
 ${help ? `<div class="${S.err ? 'warn' : 'note'}">${esc(help)}</div>` : ''}
 <div class="row"><label><input type="checkbox" id="vlaRec" ${recOn() ? 'checked' : ''} ${S.st === 'on' ? '' : 'disabled'}> ${t('⏺ 주행 기록 (학습 데이터로 PC 에 저장)')}</label></div>
 ${S.recMsg ? `<div class="note">${esc(S.recMsg)}</div>` : ''}
-<div class="note">${t('AI 카메라')} · ${t({ first: '1인칭 (로봇 눈)', third: '3인칭 (뒤에서 따라가기)', top: '위에서 (천장 카메라)' }[camMode()])}</div><canvas width="192" height="144"></canvas><div class="note" id="vlaNote"></div>`;
+<div class="note">${t('AI 카메라')} · ${t({ first: '1인칭 (로봇 눈)', third: '3인칭 (뒤에서 따라가기)', top: '위에서 (천장 카메라)' }[camMode()])}</div><canvas width="320" height="240"></canvas><div class="note" id="vlaNote"></div>`;
       cv = wrap.querySelector('canvas');
       wrap.querySelector('#vlaConn').onclick = () => (S.st === 'idle' ? connect() : disconnect());
       wrap.querySelector('#vlaRec').onchange = e => { store('mscad.vla.rec', e.target.checked ? '1' : '0'); S.recMsg = ''; };
     }
     const nt = wrap.querySelector('#vlaNote'); if (nt) nt.textContent = S.note ? `💬 ${S.note}${S.ms ? ` · ${S.ms} ms` : ''}` : '';
     if (cv) {
-      if (!X.simRunning || !lastImg) snap();
-      if (lastImg) { const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(lastImg, 0, 0, cv.width, cv.height); }
+      // 화면용은 크게·부드럽게 따로 찍음 (AI 가 받는 그림은 snap()·bc.eye() 의 96×72 그대로)
+      const H = window.__husky;
+      if (H && H.hqShot && H.hqOn()) { const r = H.hqShot((w, h, ss) => camView(w, h, ss)); if (r) H.paint(cv, r); }
+      else {
+        if (!X.simRunning || !lastImg) snap();
+        if (lastImg) { const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(lastImg, 0, 0, cv.width, cv.height); cv.style.imageRendering = 'pixelated'; }
+      }
     }
   };
   setInterval(() => draw(false), 300);

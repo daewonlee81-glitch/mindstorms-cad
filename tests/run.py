@@ -168,6 +168,122 @@ async def t_cameras(env):
         await env.close(pg)
 
 
+@test("camera-sharp-view")
+async def t_sharp(env):
+    """화면용 카메라는 크게·부드럽게 그리고, AI 가 받는 그림(96×72 · 눈 24×18)은 그대로인지."""
+    pg = await env.page()
+    try:
+        await pg.select_option("#bcCam", "third")
+        await pg.wait_for_timeout(900)
+        r = await pg.evaluate("""() => { const V = window.__vla, H = window.__husky;
+          const a = V.view(96, 72), b = V.view(96, 72, 1), ss = V.view(96, 72, 2);
+          let same = a.img.length === b.img.length; for (let k = 0; same && k < a.img.length; k++) if (a.img[k] !== b.img[k]) same = false;
+          const colors = r => { const s = new Set(); for (let k = 0; k < r.img.length; k += 4) s.add(r.img[k] << 16 | r.img[k + 1] << 8 | r.img[k + 2]); return s.size; };
+          const eye = window.__bc.eye(), cv = document.querySelector('#vlaWrap canvas');
+          return { same, c1: colors(a), c2: colors(ss), eye: eye && eye.length, cw: cv && cv.width, ch: cv && cv.height, ir: cv && cv.style.imageRendering, lv: H.hqLevel(), ms: Math.round(H.hq.ms) }; }""")
+        check(r["same"], "AI 입력 그림(96×72)이 바뀜")
+        check(r["eye"] == 1296, f"AI 눈 입력 크기가 바뀜 ({r['eye']})")
+        check(r["c2"] > r["c1"], f"슈퍼샘플링이 가장자리를 부드럽게 하지 않음 ({r['c1']} → {r['c2']})")
+        check(r["cw"] == 320 and r["ch"] == 240 and r["ir"] == "auto", f"화면 캔버스 {r}")
+        await pg.evaluate("localStorage.setItem('mscad.cam.hq', '0')")
+        await pg.wait_for_timeout(800)
+        off = await pg.evaluate("document.querySelector('#vlaWrap canvas').style.imageRendering")
+        check(off == "pixelated", f"끄면 예전처럼 칸이 보여야 함 ({off})")
+        return f"화면 {r['lv']['w']}×{r['lv']['h']}×{r['lv']['ss']}² · 색 {r['c1']}→{r['c2']}"
+    finally:
+        await env.close(pg)
+
+
+FAKE_HUB_JS = """() => { const PB = window.__pyb.PB; window.__got = [];
+  PB.tx = { write: async p => { window.__got.push(new TextDecoder().decode(p.subarray(1))); }, disconnect() {} };
+  PB.running = true; PB.maxWrite = 20; localStorage.setItem('mscad.real.on', '1'); }"""
+
+
+@test("real-robot-link")
+async def t_real(env):
+    """실제 허브 연결(가짜 허브): 시뮬레이터의 바퀴 명령이 "V:속도,회전" 으로 가고, 멈추면 0,0, 속도 비율이 맞는지."""
+    pg = await env.page()
+    try:
+        await pg.evaluate(FAKE_HUB_JS)
+        await pg.evaluate("localStorage.setItem('mscad.real.scale', '50')")
+        await set_program(pg, "rm_vla_teach", "빨간 칸으로 가")
+        await pg.click("#simRun")
+        await pg.wait_for_function("window.__bc.state.teaching", timeout=30000)
+        await pg.keyboard.down("ArrowUp")
+        with contextlib.suppress(Exception):
+            await pg.wait_for_function("window.__got.some(s => s === 'V:80,0\\n')", timeout=20000)
+        st = await pg.evaluate("(document.querySelector('#realSt') || {}).textContent || ''")
+        await pg.keyboard.up("ArrowUp")
+        got = await pg.evaluate("window.__got.slice()")
+        check("V:80,0\n" in got, f"앞으로(160 mm/s × 50%) 명령이 허브로 안 감: {got[-6:]}")
+        check("보내는 중" in st, f"상태 표시: {st}")
+        await pg.click("#simStop")
+        await pg.wait_for_timeout(700)
+        tail = await pg.evaluate("window.__got.slice(-2)")
+        check(tail and all(x == "V:0,0\n" for x in tail), f"시뮬레이터를 멈췄는데 0,0 이 아님: {tail}")
+        await pg.evaluate("localStorage.setItem('mscad.real.on', '0')")
+        await pg.wait_for_timeout(500)
+        n2 = await pg.evaluate("window.__got.length")
+        await pg.wait_for_timeout(500)
+        n3 = await pg.evaluate("window.__got.length")
+        check(n3 == n2, f"끄기를 눌렀는데 계속 보냄 ({n2} → {n3})")
+        return f"보낸 줄 {n2}개"
+    finally:
+        await env.close(pg)
+
+
+@test("real-robot-hub-program")
+async def t_real_hub(env):
+    """허브 쪽 파이썬(가짜 pybricks)을 실제로 돌려: 명령대로 움직이고, 0.3초 동안 명령이 없으면 멈추는지."""
+    pg = await env.page()
+    try:
+        await set_program(pg, "rm_vla_drive", "빨간 칸으로 가")
+        py = await pg.evaluate("() => { let p = window.__wb.wbGenPython(window.__wb.ws()); return typeof p === 'object' ? (p.code || p.src || JSON.stringify(p)) : p; }")
+    finally:
+        await env.close(pg)
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        (d / "pybricks").mkdir()
+        (d / "pybricks" / "__init__.py").write_text("")
+        stub = "class _Any:\n    def __init__(self, *a, **k): pass\n    def __getattr__(self, n): return _Any()\n    def __call__(self, *a, **k): return _Any()\n" \
+               "def __getattr__(n): return _Any()\n"
+        for m in ("hubs", "pupdevices", "parameters", "iodevices"):
+            (d / "pybricks" / f"{m}.py").write_text(stub)
+        (d / "pybricks" / "robotics.py").write_text(
+            "import sys\nclass DriveBase:\n    def __init__(self, *a, **k): pass\n"
+            "    def drive(self, s, t): print('DRIVE', s, t, flush=True)\n    def stop(self): print('STOP', flush=True)\n"
+            "    def __getattr__(self, n): return lambda *a, **k: None\n")
+        (d / "pybricks" / "tools.py").write_text(
+            "import time\nclass StopWatch:\n    def __init__(self): self.t0 = time.monotonic()\n    def time(self): return int((time.monotonic() - self.t0) * 1000)\n"
+            "def wait(ms): time.sleep(ms / 1000)\n")
+        (d / "prog.py").write_text(py, encoding="utf-8")
+        (d / "boot.py").write_text(
+            "import os, sys\nclass S:\n    def fileno(self): return 0\n    def read(self, n): return os.read(0, n).decode()\n"
+            "sys.stdin = S()\nsys.path.insert(0, os.path.dirname(__file__))\nexec(compile(open(os.path.join(os.path.dirname(__file__), 'prog.py'), encoding='utf-8').read(), 'prog.py', 'exec'))\n")
+        p = subprocess.Popen([sys.executable, "-I", str(d / "boot.py")], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        lines: list[str] = []
+        threading.Thread(target=lambda: [lines.append(l.decode().strip()) for l in p.stdout], daemon=True).start()
+        try:
+            time.sleep(0.5)
+            for _ in range(5):
+                p.stdin.write(b"V:120,-60\n"); p.stdin.flush(); time.sleep(0.1)
+            p.stdin.write(b"V:999,999\n"); p.stdin.flush(); time.sleep(0.1)
+            p.stdin.write(b"garbage\nV:x,1\n"); p.stdin.flush()
+            t_last = time.monotonic(); time.sleep(0.8)
+        except BrokenPipeError:
+            pass
+        finally:
+            p.kill()
+        err = p.stderr.read().decode()
+        check("REAL LINK" in "\n".join(lines), f"프로그램이 시작하지 않음: {err[-400:]}")
+        check("DRIVE 120 -60" in lines, f"명령대로 움직이지 않음: {lines[:8]}")
+        check("DRIVE 400 360" in lines, "허브 쪽 속도 제한(±400, ±360)이 없음")
+        i = max(i for i, l in enumerate(lines) if l.startswith("DRIVE"))
+        check("STOP" in lines[i:], f"명령이 끊겼는데 멈추지 않음: {lines[-5:]}")
+        check(lines[-1] == "STOP", f"멈춘 뒤 다시 움직임: {lines[-3:]}")
+        return f"DRIVE {sum(l.startswith('DRIVE') for l in lines)}번 → STOP"
+
+
 @test("teach-by-keyboard")
 async def t_teach(env):
     pg = await env.page()
@@ -311,7 +427,7 @@ async def t_codegen(env):
     """새 블록들의 시뮬레이터(JS)·Pybricks(파이썬) 코드가 만들어지고 문법이 맞는지."""
     pg = await env.page()
     try:
-        cases = (("rm_vla_drive", "빨간 칸으로 가", None, "only in the simulator"), ("rm_vla_teach", "빨간 칸으로 가", None, "simulator"),
+        cases = (("rm_vla_drive", "빨간 칸으로 가", None, "REAL LINK"), ("rm_vla_teach", "빨간 칸으로 가", None, "REAL LINK"),
                  ("rm_nn_drive", None, {"in": [{"k": "color", "p": "C"}], "H": 6, "W": [0.1] * 26, "S": 300, "T": 180}, "nn_run"))
         for blk, task, data, want in cases:
             await set_program(pg, blk, task, data)
@@ -588,9 +704,11 @@ CONTRACT = {
     "window.__cad": "THREE camera controls model objs root scene",
     "window.__cad.ext": "add apply bundle index loader matPx motors palette push reload robot sel simRebuild simRunning status",
     "window.__wb": "WB_LIB Ye dg enterSim hub lang proj save simOn wbBuild wbCompileSrc wbGenPython wbSources wbToolbox ws",
+    "window.__pyb": "PB pbStopHub pbRun",
+    "window.__pyb.PB": "tx q running maxWrite",
 }
 ADDON_GLOBALS = ("__cadx __cadxReady __classes __axes __backup __simRigs __simRigObjs __husky __mech __trx __othelloAI __simCode "
-                 "__line2 __trs __nnF __trainModel __rfGuide __umcGuide __wbSync __wbTb __vla __bc __vlaviz __nnviz").split()
+                 "__line2 __trs __nnF __trainModel __rfGuide __umcGuide __wbSync __wbTb __vla __bc __vlaviz __nnviz __real").split()
 
 
 # index.html 의 <script> 순서: 왼쪽 파일은 오른쪽 파일들보다 뒤에 불러와야 함 (불러올 때 그 전역을 바로 씀)
@@ -599,6 +717,7 @@ LOAD_AFTER = {
     "cadmech.js": ["app.js"], "umc.js": ["app.js"], "rfmodels.js": ["umc.js"], "othelloai.js": ["umc.js", "huskylens.js"], "rfguide.js": ["umc.js"],
     "simsave.js": ["app.js"], "line2.js": ["app.js"], "trainmodel.js": ["app.js"],
     "vla.js": ["app.js", "wordblock-sync.js", "huskylens.js"], "bc.js": ["vla.js"], "vlaviz.js": ["bc.js", "vla.js"], "nnviz.js": ["trainmodel.js", "bc.js"],
+    "real.js": ["vla.js", "bc.js"],
 }
 
 

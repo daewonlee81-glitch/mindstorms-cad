@@ -47,7 +47,7 @@ index.html
 | fixes.js | 작은 화면 고침 모음 | — | DOM |
 | cadx.js | 밝은 미리보기·미세 각도·STL 불러오기 | `__cadx` `__cadxReady` | `__cad.ext` (훅 1–5) |
 | simports.js | 시뮬레이터 포트 연결·추가 모터 돌리기 | `__simRigs` `__simRigObjs` | `__cad.ext` (훅 6·7) |
-| huskylens.js | 허스키렌즈 부품·카메라, **일반 카메라 그림 `view()`** | `__husky` | `__cad.ext` `__umc` (훅 8) |
+| huskylens.js | 허스키렌즈 부품·카메라, **일반 카메라 그림 `view()`**(ss 슈퍼샘플링), 화면용 선명한 그림 `preview()`·`hqShot()`(속도 따라 단계 자동) | `__husky` | `__cad.ext` `__umc` (훅 8) |
 | cadmech.js | CAD ⟳ 회전 실험 (축·기어) | `__mech` | `__cad` |
 | umc.js | UMC 미지 미션·Robofest 경기장, 학습기 경기장 훅 | `__trx` `__umcGuide` `__umcNew` `__umcDebug` | `__umc` (patch_trx) |
 | rfmodels.js | Robofest 3D 준비물 모형 | `__rfDisp` | `__umc` |
@@ -60,6 +60,7 @@ index.html
 | bc.js | 🧒 따라 하기 학습 (시범·학습·주행·시범 점검) | `__bc` | `__vla` |
 | vlaviz.js | 🔍 AI 속 들여다보기 | `__vlaviz` | `__bc` `__vla` |
 | nnviz.js | 🔍 신경망 들여다보기 (가중치) | `__nnviz` (`__nnF` 감쌈) | `__trainModel` `__nnF` |
+| real.js | real2sim 1단계: 🔗 실제 로봇도 같이 움직이기 — 바퀴 명령을 Pybricks stdin `V:속도,회전` 으로 전달, 허브 쪽 받기 프로그램(0.3초 안전 정지) | `__real` (`__vla.drive` `__bc.drive/teach` 감쌈) | `__pyb.PB` `__vla` `__bc` |
 
 PC 쪽 프로그램: `vla-helper/` (VLA 도우미 서버, `vla-helper.zip` 으로 내려받음).
 
@@ -73,6 +74,7 @@ PC 쪽 프로그램: `vla-helper/` (VLA 도우미 서버, `vla-helper.zip` 으�
 | `window.__cad.ext` (훅 5–8) | add apply bundle index loader matPx motors palette push reload robot sel simRebuild simRunning status |
 | `window.__umc` | T api cam ctl esc i18n mat mats phys pose props robot sim time |
 | `window.__wb` | WB_LIB Ye dg enterSim hub lang proj save simOn wbBuild wbCompileSrc wbGenPython wbSources wbToolbox ws |
+| `window.__pyb` · `.PB` | pbRun pbStopHub PB · PB.tx PB.q PB.running PB.maxWrite (허브 블루투스 연결 — real.js 가 stdin 에 씀) |
 
 자주 쓰는 것: `__umc.pose()` 로봇 위치(x, z mm, th 라디안) · `__umc.time()` 시뮬레이터 시간 · `__umc.props()` 경기장 물체 · `__umc.mat()` 지금 매트 · `__cad.ext.simRunning` 실행 중인지 · `__wb.ws()` 블록 작업 공간 · `__wb.wbCompileSrc(ws).src` 시뮬레이터 JS · `__wb.wbGenPython(ws)` Pybricks 파이썬.
 
