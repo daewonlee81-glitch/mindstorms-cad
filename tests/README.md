@@ -1,0 +1,42 @@
+# 자동 회귀 테스트
+
+기능을 고친 뒤 다른 곳이 깨지지 않았는지 한 번에 확인합니다. 실제 Chrome(화면 없이)으로 앱을 열고, 학생이 하듯이 블록을 넣고 실행해 봅니다.
+
+## 실행
+
+```bash
+pip install playwright websockets pillow numpy
+python -m playwright install chromium
+
+python tests/run.py            # 빠른 테스트 10개 (약 2분)
+python tests/run.py --full     # + 시범→학습→주행 (약 3~4분)
+python tests/run.py -k camera  # 이름에 camera 가 들어간 것만
+```
+
+- 다른 Chrome 을 쓰려면 `CHROME=/경로/chrome python tests/run.py`
+- 결과 요약은 `tests/_out/result.json`, 파이썬 문법 오류가 나면 생성된 코드도 `tests/_out/` 에 남습니다.
+- 하나라도 실패하면 종료 코드 1 (자동 실행에서 ❌ 표시).
+
+GitHub 에 올리면(push) **Actions** 탭에서 빠른 테스트가 저절로 돌아갑니다. 전체 테스트는 Actions → tests → **Run workflow** 로 실행합니다.
+
+## 테스트 목록
+
+| 이름 | 확인하는 것 |
+|---|---|
+| js-syntax | 모든 .js 파일 문법 (node 필요) |
+| page-load | 앱이 오류 없이 열리고, VLA·신경망 기능과 블록·시뮬레이터 칸이 모두 있는지 |
+| ai-camera-views | AI 카메라 1인칭·3인칭·위에서 그림 — 3인칭·위에서는 로봇(보라·노랑 앞)이 보이고 1인칭은 안 보이는지 |
+| teach-by-keyboard | 「🎮 운전해서 가르치기」: 키보드로 운전하면 로봇이 움직이고 장면(앞으로·멈춤)이 쌓이는지, 스페이스가 시뮬레이터를 멈추지 않는지 |
+| demo-check-warnings | 학습 창 ⚠️ 시범 점검 5가지 경고와 시뮬레이터 칸 경고 개수 |
+| train-language-and-inspect | 같은 그림이라도 지시가 다르면 다른 행동을 배우는지(L), 들여다보기 계산(주목한 곳·반사실·처음 듣는 낱말) |
+| look-inside-windows | 🔍 AI 속 들여다보기 창(숨은 칸 클릭 → 가중치 그림·행동 막대), 학습 창 가중치 그림 |
+| neural-network-weights | 🔍 신경망 들여다보기 계산이 실제 신경망(허브와 같은 계산)과 같은지, 가중치 표 32칸, 계산식, 달릴 때 실제 센서 값 |
+| code-generation | 새 블록 3개의 시뮬레이터(JS) 코드 문법과 Pybricks 파이썬 코드 문법 |
+| vla-helper-server | PC VLA 도우미: 연습 모드 명령, 주행 기록 저장, 허용 안 된 사이트 거부, 웹 CAD 연결 |
+| demo-train-drive (3인칭) — `--full` | 스크립트로 빨강·파랑 시범 2번씩 → 40번 학습 → 같은 출발점에서 지시만 바꿔 맞는 칸(빨강 = 위, 파랑 = 아래)으로 가는지 |
+
+## 테스트 더하기
+
+`tests/run.py` 에 `@test("이름")` 붙인 `async def` 함수를 하나 더 쓰면 됩니다. `pg = await env.page()` 로 깨끗한 창을 열고, `check(조건, "실패 설명")` 으로 확인하고, 끝에 `await env.close(pg)` 를 부릅니다. 느린 테스트는 `@test("이름", full=True)`.
+
+알아 둘 점: 화면 없는 Chrome 은 시뮬레이터 시간이 실제보다 느리게 흐를 수 있습니다. "몇 초 기다리기" 대신 `wait_for_function(...)` 으로 상태를 기다리세요.

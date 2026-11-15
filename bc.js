@@ -230,16 +230,18 @@
     if (u && l) return 4; if (u && r) return 5; if (u) return 1; if (l) return 2; if (r) return 3; return -1;
   };
   const onKey = down => e => {
-    if (!B.teaching) return; const k = KEYS[e.code]; if (!k) return;
+    const k = KEYS[e.code]; if (!k) return;
     const tg = e.target; if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.isContentEditable)) return;
-    e.preventDefault(); e.stopPropagation(); down ? B.keys.add(k) : B.keys.delete(k);
+    // 키 상태는 늘 기억 (▶ 실행 전에 미리 누르고 있던 키도 가르치기가 시작되면 바로 쓰임), 가로채기는 가르치는 중에만
+    down ? B.keys.add(k) : B.keys.delete(k);
+    if (B.teaching) { e.preventDefault(); e.stopPropagation(); }
   };
   window.addEventListener('keydown', onKey(true), true); window.addEventListener('keyup', onKey(false), true);
   window.addEventListener('blur', () => B.keys.clear());
 
   // ───────── 가르치기·주행 루프 ─────────
   const teach = async (api, task) => {
-    B.teaching = true; B.runN = 0; B.keys.clear(); B.note = t('keys'); draw(true);
+    B.teaching = true; B.runN = 0; B.note = t('keys'); draw(true);
     let last = -1;
     try {
       while (X.simRunning) {
