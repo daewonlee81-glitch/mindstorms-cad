@@ -29,6 +29,14 @@
     '시범이 너무 적어요 (최소 30장면)': 'Too few scenes (at least 30)', '장면을 모으는 중': 'collecting scenes', '이번에 모은 장면': 'scenes this run',
     '학습 끝': 'Training done', '🔍 AI 속 들여다보기': '🔍 Look inside the AI', 'AI 카메라': 'AI camera', '1인칭 (로봇 눈)': '1st person (robot eye)', '3인칭 (뒤에서 따라가기)': '3rd person (follows from behind)', '위에서 (천장 카메라)': 'Top (ceiling camera)', '카메라': 'Camera',
     '이 모델은 이 카메라로 배웠어요': 'This model learned with this camera', '카메라를 바꾸거나 다시 학습하세요': 'switch the camera or train again',
+    'chk.one': 'Only one instruction is taught: 「{0}」. With nothing to compare, the AI does not need to tell words apart and moves by the picture only. Teach another instruction too.',
+    'chk.few': '「{0}」 has only {1} scenes. 100+ (3+ drives) recommended — with a thin textbook the AI does one thing only.',
+    'chk.same': '{1}% of the 「{0}」 demos are {2}. The AI will mostly do just that. Add scenes where you correct the robot with ← → when it drifts.',
+    'chk.nostop': 'Stop (Space) was never taught for 「{0}」, so it will not stop on arrival — hold Space for 1–2 s at the target.',
+    'chk.physmix': '{0} scenes with the physics engine on and {1} with it off are mixed. The robot moves differently — keep one setting.',
+    'chk.phys.wason': '⚠️ The demos used the physics engine but it is off now — the robot moves differently from the demos.',
+    'chk.phys.wasoff': '⚠️ The demos had the physics engine off but it is on now — the robot may drift even on a straight command.',
+    '시범 점검': 'Demo check', '시범 점검: 문제 없음': 'Demo check: no problems found', '점검': 'check',
     'wgt.tip': 'Weight pictures — the "favourite picture" of each of the 24 hidden cells (mid grey = 0, brighter or stronger colour = bigger weight). They start as random noise and take on shapes such as target colours and lines while learning.',
     'cam.tip': 'The camera decides what the AI sees. Scenes and models are kept separately for each camera — teach and train again after switching.', '파일을 열 수 없습니다': 'Cannot open the file', '닫기': 'Close',
   };
@@ -37,6 +45,13 @@
     'keys': '키: ↑ 앞으로 · ← → 제자리 돌기 · ↑+←/→ 앞으로 가며 돌기 · 스페이스 = "여기서 멈춰"(도착). 키를 누르고 있을 때만 장면이 모입니다.',
     'wgt.tip': '가중치 그림 — 숨은 칸 24개가 각각 "가장 좋아하는 그림"입니다 (가운데 회색 = 0, 밝거나 색이 진할수록 큰 가중치). 학습 전에는 지글지글한 무작위 그림이었다가, 배우면서 목표 색·선 같은 모양이 생깁니다.',
     'cam.tip': 'AI 카메라가 AI가 보는 그림을 정합니다. 장면과 모델은 카메라마다 따로입니다 — 카메라를 바꾸면 다시 가르치고 학습하세요.',
+    'chk.one': '가르친 지시가 「{0}」 하나뿐이에요. 비교할 다른 말이 없으면 AI가 말을 구분할 필요가 없어서 그림만 보고 움직여요. 다른 지시(예: 파란 칸으로 가)도 가르쳐 보세요.',
+    'chk.few': '「{0}」 장면이 {1}개뿐이에요. 100개 이상(3번 이상 운전)을 추천해요. 교과서가 얇으면 AI가 한 가지만 해요.',
+    'chk.same': '「{0}」 시범의 {1}%가 같은 행동({2})이에요. AI가 거의 이것만 하게 돼요. 로봇이 휘어 갈 때 ← →로 바로잡는 장면도 넣어 주세요.',
+    'chk.nostop': '「{0}」에서 멈춤(스페이스)을 가르치지 않았어요. 도착해도 멈추지 않아요 — 목표 앞에서 스페이스를 1~2초 눌러 주세요.',
+    'chk.physmix': '물리엔진 켜짐 장면 {0}개와 꺼짐 장면 {1}개가 섞여 있어요. 로봇 움직임이 달라서 헷갈려요 — 한 가지로 맞춰 주세요.',
+    'chk.phys.wason': '⚠️ 시범은 물리엔진 켜짐으로 했는데 지금은 꺼져 있어요 — 로봇 움직임이 시범 때와 달라요.',
+    'chk.phys.wasoff': '⚠️ 시범은 물리엔진 꺼짐으로 했는데 지금은 켜져 있어요 — 같은 명령에도 로봇이 휘어 갈 수 있어요.',
     'run.help': '「👁️ VLA로 주행」 블록을 「프로그램 시작할 때」 아래에 붙이고, 가르친 것과 같은 지시를 쓰고, 두뇌를 "내가 가르친 모델"로 고른 뒤 ▶ 실행.',
   };
   const lang = () => (document.documentElement.lang || 'ko').slice(0, 2);
@@ -77,13 +92,34 @@
   const kvSet = async (k, v) => { try { const d = await idb(); await new Promise(r => { const tx = d.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = r; tx.onerror = r; }); } catch (e) { } };
   const B = { data: [], model: null, hist: null, live: null, keys: new Set(), teaching: false, runN: 0, training: false, note: '' };
   // 장면: { task, a, img(Uint8Array NI) }
-  const saveData = () => kvSet('data', B.data.map(d => ({ task: d.task, a: d.a, img: d.img, cam: d.cam || 'first', th: d.th || 0 })));
+  const saveData = () => kvSet('data', B.data.map(d => ({ task: d.task, a: d.a, img: d.img, cam: d.cam || 'first', th: d.th || 0, phys: d.phys ?? null })));
   const saveModel = () => kvSet('model', B.model);
   (async () => {
-    const d = await kvGet('data'); if (Array.isArray(d)) B.data = d.map(x => ({ task: x.task, a: x.a, img: new Uint8Array(x.img), cam: x.cam || 'first', th: x.th || 0 }));
+    const d = await kvGet('data'); if (Array.isArray(d)) B.data = d.map(x => ({ task: x.task, a: x.a, img: new Uint8Array(x.img), cam: x.cam || 'first', th: x.th || 0, phys: x.phys ?? null }));
     const m = await kvGet('model'); if (m && m.W1 && m.U && m.nin === NIN) B.model = m;
     draw(true);
   })();
+
+  // ───────── 시범 점검: 모델이 한 가지만 하게 되는 흔한 원인을 미리 알려 줌 ─────────
+  const physOn = () => { try { return !!(U.phys && U.phys()); } catch (e) { return false; } };
+  const physMajority = set => { const k = set.filter(d => d.phys === true || d.phys === false); if (!k.length) return null; return k.filter(d => d.phys).length * 2 >= k.length; };
+  const checks = () => {
+    const mode = V.camMode(), set = B.data.filter(d => (d.cam || 'first') === mode), out = [];
+    if (!set.length) return out;
+    const by = {}; set.forEach(d => { const o = by[d.task] || (by[d.task] = { n: 0, c: new Array(NA).fill(0) }); o.n++; o.c[d.a]++; });
+    const tasks = Object.keys(by);
+    if (tasks.length === 1) out.push(t('chk.one').replace('{0}', tasks[0]));
+    for (const [k, o] of Object.entries(by)) {
+      if (o.n < 100) out.push(t('chk.few').replace('{0}', k).replace('{1}', o.n));
+      let top = 0; for (let i = 1; i < NA; i++) if (o.c[i] > o.c[top]) top = i;
+      if (o.n >= 10 && o.c[top] / o.n >= 0.8) out.push(t('chk.same').replace('{0}', k).replace('{1}', Math.round(o.c[top] / o.n * 100)).replace('{2}', `${AICON[top]} ${t(ANAME[top])}`));
+      if (o.n >= 10 && !o.c[0]) out.push(t('chk.nostop').replace('{0}', k));
+    }
+    const k = set.filter(d => d.phys === true || d.phys === false), on = k.filter(d => d.phys).length;
+    if (on && on < k.length) out.push(t('chk.physmix').replace('{0}', on).replace('{1}', k.length - on));
+    return out;
+  };
+  const physNote = () => { const m = B.model; if (!m || m.phys == null || m.phys === physOn()) return ''; return t(m.phys ? 'chk.phys.wason' : 'chk.phys.wasoff'); };
 
   // ───────── 신경망: x(1328) → tanh(24) → softmax(6) ─────────
   const NH = 24, LS = 5; // LS: 낱말 칸 세기 (그림 1296칸에 묻히지 않게)
@@ -183,7 +219,7 @@
       await new Promise(res => setTimeout(res, 0));
     }
     const tasks = [...new Set(all.map(d => d.task))];
-    return { W1: m.W1, b1: m.b1, W2: m.W2, b2: m.b2, U: m.U, Ub: m.Ub, nin: NIN, cam: mode, vocab: [...new Set(tasks.flatMap(words))], tasks, n: all.length, acc: hist.length ? hist[hist.length - 1] : null, hist, at: new Date().toISOString() };
+    return { W1: m.W1, b1: m.b1, W2: m.W2, b2: m.b2, U: m.U, Ub: m.Ub, nin: NIN, cam: mode, phys: physMajority(all), vocab: [...new Set(tasks.flatMap(words))], tasks, n: all.length, acc: hist.length ? hist[hist.length - 1] : null, hist, at: new Date().toISOString() };
   };
 
   // ───────── 키보드·화면 버튼 ─────────
@@ -209,7 +245,7 @@
       while (X.simRunning) {
         const img = eye(), a = keyAct(), p0 = U.pose();
         B.live = { img, a, p: null, task, th: p0 ? p0.th : 0, teach: true }; B.ticks = (B.ticks || 0) + 1;
-        if (a >= 0 && img) { B.data.push({ task, a, img, cam: V.camMode(), th: p0 ? p0.th : 0 }); B.runN++; }
+        if (a >= 0 && img) { B.data.push({ task, a, img, cam: V.camMode(), th: p0 ? p0.th : 0, phys: physOn() }); B.runN++; }
         if (a !== last) { const v = ACT[a < 0 ? 0 : a]; await api.wbDrive(v[0], v[1]); last = a; }
         await api.wait(0.1);
       }
@@ -221,7 +257,7 @@
     if (!B.model) { B.note = t('아직 가르친 모델이 없어요 — 학습 창에서 먼저 학습시키세요'); draw(true); await api.wbDrive(0, 0); throw new Error(B.note); }
     if (B.model.cam !== V.camMode()) { B.note = `${t('이 모델은 이 카메라로 배웠어요')}: ${t(CAMN[B.model.cam])} — ${t('카메라를 바꾸거나 다시 학습하세요')}`; draw(true); await api.wbDrive(0, 0); throw new Error(B.note); }
     const unk = words(task).filter(w => !B.model.vocab.includes(w));
-    B.note = unk.length ? `${t('처음 듣는 낱말')}: ${unk.join(', ')}` : ''; draw(true);
+    B.note = [unk.length ? `${t('처음 듣는 낱말')}: ${unk.join(', ')}` : '', physNote()].filter(Boolean).join(' · '); draw(true);
     let last = -1;
     while (X.simRunning) {
       const img = eye(); if (!img) { await api.wait(0.1); continue; }
@@ -268,6 +304,7 @@
 .bcPad{display:grid;grid-template-columns:repeat(3,38px);gap:4px;margin:4px 0}.bcPad button{height:34px;font-size:16px!important;touch-action:none;user-select:none}
 #bcDlg{position:fixed;left:16px;bottom:16px;width:min(460px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;z-index:100000;background:var(--bg,#fff);color:inherit;border:1px solid rgba(127,127,127,.35);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:12px 14px}
 #bcDlg h3{margin:0 0 6px;font-size:15px}#bcDlg h4{margin:12px 0 4px;font-size:13px}#bcDlg table{width:100%;border-collapse:collapse;font-size:12px}#bcDlg td,#bcDlg th{border-bottom:1px solid rgba(127,127,127,.2);padding:3px 4px;text-align:left}
+#bcDlg .warn{font-size:12px;line-height:1.5;background:rgba(249,168,37,.15);border-radius:8px;padding:6px 8px;margin:6px 0}#bcDlg .warn ul{margin:2px 0 0;padding-left:18px}
 #bcDlg canvas.chart{width:100%;height:120px;border-radius:6px;background:rgba(127,127,127,.08)}#bcDlg .x{position:absolute;right:10px;top:8px}`;
   document.head.appendChild(css);
 
@@ -276,7 +313,8 @@
   const summary = () => {
     const m = B.model;
     const mode = V.camMode(), n = B.data.filter(d => (d.cam || 'first') === mode).length;
-    return `${CAMI[mode]} ${t('시범 장면')} ${n} · ${m ? `${t('모델')} ${CAMI[m.cam] || ''} ✔ (${t('정답률')} ${m.acc ? Math.round(m.acc.va * 100) : '?'}%)` : t('모델 없음')}`;
+    const w = checks().length;
+    return `${CAMI[mode]} ${t('시범 장면')} ${n} · ${m ? `${t('모델')} ${CAMI[m.cam] || ''} ✔ (${t('정답률')} ${m.acc ? Math.round(m.acc.va * 100) : '?'}%)` : t('모델 없음')}${w ? ` · ⚠️ ${t('점검')} ${w}` : ''}`;
   };
   const draw = force => {
     const sim = document.getElementById('sim'); if (sim && sim.hidden) return;
@@ -336,6 +374,7 @@ ${B.teaching ? `<div class="bcPad"><span></span><button data-k="u">▲</button><
 <h4>${t('① 모은 시범')}</h4>
 <div class="note">${t('AI 카메라')}: ${CAMI[V.camMode()]} ${t(CAMN[V.camMode()])} — ${t('cam.tip')}</div>
 ${rows ? `<table><tr><th>${t('카메라')}</th><th>${t('지시')}</th><th>${t('장면')}</th><th>${t('행동별')}</th><th></th></tr>${rows}</table>` : `<div class="note">${t('아직 시범이 없어요. 「🎮 운전해서 가르치기」 블록으로 운전해 보세요.')}</div>`}
+${(() => { const c = checks(); return c.length ? `<div class="warn">⚠️ <b>${t('시범 점검')}</b><ul>${c.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : (B.data.length ? `<div class="note">✅ ${t('시범 점검: 문제 없음')}</div>` : ''); })()}
 <div class="note">${t('keys')}</div>
 <div class="row"><button id="bcSave">${t('💾 파일로 저장')}</button><button id="bcLoad">${t('📂 파일 열기')}</button><button id="bcClear">${t('모두 지우기')}</button><input type="file" id="bcFile" accept=".json" hidden></div>
 <h4>${t('② 학습시키기')}</h4>
@@ -353,7 +392,7 @@ ${rows ? `<table><tr><th>${t('카메라')}</th><th>${t('지시')}</th><th>${t('�
     dlg.querySelector('#bcRounds').onchange = e => store('mscad.bc.rounds', e.target.value);
     dlg.querySelector('#bcSave').onclick = () => {
       const b64 = u => { let s = ''; for (let i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192)); return btoa(s); };
-      const out = { format: 'robomakers-vla-bc', version: 1, saved: new Date().toISOString(), eye: [EW, EH], actions: ANAME, data: B.data.map(d => ({ task: d.task, a: d.a, img: b64(d.img), cam: d.cam || 'first', th: d.th || 0 })),
+      const out = { format: 'robomakers-vla-bc', version: 1, saved: new Date().toISOString(), eye: [EW, EH], actions: ANAME, data: B.data.map(d => ({ task: d.task, a: d.a, img: b64(d.img), cam: d.cam || 'first', th: d.th || 0, phys: d.phys ?? null })),
         model: B.model ? { ...B.model, W1: b64(new Uint8Array(B.model.W1.buffer)), b1: b64(new Uint8Array(B.model.b1.buffer)), W2: b64(new Uint8Array(B.model.W2.buffer)), b2: b64(new Uint8Array(B.model.b2.buffer)), U: b64(new Uint8Array(B.model.U.buffer)), Ub: b64(new Uint8Array(B.model.Ub.buffer)) } : null };
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(out)], { type: 'application/json' })); a.download = `vla-teach-${new Date().toISOString().slice(0, 10)}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     };
@@ -363,7 +402,7 @@ ${rows ? `<table><tr><th>${t('카메라')}</th><th>${t('지시')}</th><th>${t('�
       try {
         const j = JSON.parse(await file.files[0].text()); if (j.format !== 'robomakers-vla-bc') throw 0;
         const u8 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0)), f32 = s => new Float32Array(u8(s).buffer);
-        B.data = (j.data || []).map(d => ({ task: d.task, a: d.a, img: u8(d.img), cam: d.cam || 'first', th: d.th || 0 }));
+        B.data = (j.data || []).map(d => ({ task: d.task, a: d.a, img: u8(d.img), cam: d.cam || 'first', th: d.th || 0, phys: d.phys ?? null }));
         B.model = j.model && j.model.nin === NIN ? { ...j.model, W1: f32(j.model.W1), b1: f32(j.model.b1), W2: f32(j.model.W2), b2: f32(j.model.b2), U: f32(j.model.U), Ub: f32(j.model.Ub) } : null;
         saveData(); saveModel(); drawDlg(); draw(true);
       } catch (e) { alert(t('파일을 열 수 없습니다')); }
