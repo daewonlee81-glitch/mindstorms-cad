@@ -130,7 +130,9 @@
   });
 
   // 블록이 부르는 주행 루프 — 묶음을 실행하는 동안 다음 묶음을 미리 요청 (비동기 추론)
+  const brain = () => store('mscad.vla.brain') || 'mine';
   const drive = async (api, task) => {
+    if (brain() === 'mine' && window.__bc) return window.__bc.drive(api, task);
     if (S.st !== 'on') { S.note = t('VLA 도우미가 연결되어 있지 않습니다'); draw(true); await api.wbDrive(0, 0); throw new Error(t('VLA 도우미가 연결되어 있지 않습니다')); }
     let next = ask(task);
     while (X.simRunning) {
@@ -142,7 +144,7 @@
       if (S.st !== 'on') { await api.wbDrive(0, 0); break; }
     }
   };
-  window.__vla = { drive, connect, disconnect, snap, state: S };
+  window.__vla = { drive, connect, disconnect, snap, state: S, cam: frontCam, CW, CH, brain, store };
 
   // ───────── 주행 기록 (0.1초마다, 프로그램 실행 중) ─────────
   const recOn = () => store('mscad.vla.rec') === '1';
@@ -191,7 +193,7 @@
   window.__wbTb = (tb, hub) => {
     const out = prevTb ? prevTb(tb, hub) : tb, box = out || tb;
     try {
-      if (box && Array.isArray(box.contents) && !box.contents.some(c => c.vla)) box.contents.push({ kind: 'category', name: '🤖 VLA', colour: '#7E57C2', vla: 1, contents: [{ kind: 'block', type: 'rm_vla_drive' }] });
+      if (box && Array.isArray(box.contents) && !box.contents.some(c => c.vla)) box.contents.push({ kind: 'category', name: '🤖 VLA', colour: '#7E57C2', vla: 1, contents: [{ kind: 'block', type: 'rm_vla_teach' }, { kind: 'block', type: 'rm_vla_drive' }].filter(b => Bly.Blocks[b.type]) });
     } catch (e) { }
     return box;
   };
