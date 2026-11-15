@@ -471,7 +471,7 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
       const food = of('food');
       // 통 안의 사료·떨어뜨리기·그릇은 mat.anim (매 화면마다)
       const fOut = food.filter(o => !o.held).length; // 다 떨어져 바닥에 닿은 것만
-      const fIn = food.filter(o => !o.fallen && !o.held && (o.inBowl || Math.hypot(cv(o)[0] - G.bowl[0], cv(o)[1] - G.bowl[1]) <= 60)).length;
+      const fIn = food.filter(o => !o.fallen && !o.held && !o.onBot && (o.inBowl || Math.hypot(cv(o)[0] - G.bowl[0], cv(o)[1] - G.bowl[1]) <= 60)).length;
       // 가장자리 밖 구조물: 그 구간에서 테이블 밖으로 떨어진 물체 (구조물 폭 ±1.5cm)
       const offInto = (o, r) => { if (!o || !o.fallen) return false; const [x, y] = cv(o); return x >= r[0] - 15 && x <= r[2] + 15 && (r[1] < 0 ? y < 40 : y > h - 40); };
       const lit = of('debris').filter(o => offInto(o, G.litter)).length;
@@ -552,6 +552,8 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
           delete o.fall; o.held = 0; delete o.base; o.y0 = o.hgt / 2;
           o.x = wx(500) + F.land[0]; o.z = wz(44) + F.land[2]; o.vx = o.vz = 0;
           if (g) { g.position.set(0, 0, 0); g.rotation.set(0, 0, 0); }
+          // 로봇 위(받침판 등)에 떨어지면 로봇이 싣고 감 (rfguide.js)
+          if (window.__rfGuide && window.__rfGuide.catchFood && window.__rfGuide.catchFood(o)) continue;
           const ph = U.phys && U.phys(); if (ph && ph.addProp && !o.body) ph.addProp(o);
           continue;
         }
@@ -561,7 +563,7 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
       if (!(U.phys && U.phys())) {
         const bx = wx(G.bowl[0]), bz = wz(G.bowl[1]);
         for (const o of food) {
-          if (o.held || o.fallen || o.inBowl) continue;
+          if (o.held || o.fallen || o.inBowl || o.onBot) continue;
           if (Math.hypot(o.x - bx, o.z - bz) > 120) continue;
           const n = food.filter(x => x.inBowl).length, ang = n * 2.4, rr = n ? 14 + 6 * Math.sqrt(n) : 0;
           o.inBowl = 1; o.base = { x: bx + rr * Math.cos(ang), z: bz + rr * Math.sin(ang), th: Math.random() * 6 };
