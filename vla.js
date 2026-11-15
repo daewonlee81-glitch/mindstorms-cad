@@ -23,7 +23,10 @@
     '❓ 사용법': ['❓ How to use', '❓ 使い方', '❓ 使用方法', '❓ Cómo usar'],
     '⬇ 도우미 내려받기': ['⬇ Download helper', '⬇ ヘルパーをダウンロード', '⬇ 下载助手', '⬇ Descargar asistente'],
     '⏺ 주행 기록 (학습 데이터로 PC 에 저장)': ['⏺ Record runs (save to the PC as training data)', '⏺ 走行を記録 (学習データとして PC に保存)', '⏺ 记录行驶 (作为训练数据保存到电脑)', '⏺ Grabar recorridos (guardar en el PC como datos)'],
-    '로봇 앞 카메라': ['Robot front camera', 'ロボット前カメラ', '机器人前置摄像头', 'Cámara frontal'],
+    'AI 카메라': ['AI camera', 'AI カメラ', 'AI 摄像头', 'Cámara IA'],
+    '1인칭 (로봇 눈)': ['1st person (robot eye)', '一人称 (ロボットの目)', '第一人称 (机器人眼睛)', '1.ª persona (ojo del robot)'],
+    '3인칭 (뒤에서 따라가기)': ['3rd person (follows from behind)', '三人称 (後ろから追う)', '第三人称 (从后面跟随)', '3.ª persona (sigue desde atrás)'],
+    '위에서 (천장 카메라)': ['Top (ceiling camera)', '真上 (天井カメラ)', '俯视 (天花板摄像头)', 'Desde arriba (cámara de techo)'],
     '기록 중': ['recording', '記録中', '记录中', 'grabando'], '저장됨': ['saved', '保存しました', '已保存', 'guardado'], '장': ['frames', '枚', '张', 'fotogramas'],
     'help.fail': [
       'Could not connect. ① Is the VLA helper running on this PC (black window open)? ② If Chrome asks to allow connecting to devices on your local network, press Allow. ③ If you blocked it: click the icon left of the address bar → Site settings → Local network → Allow, then reload.',
@@ -87,14 +90,17 @@
   };
   const disconnect = () => { store('mscad.vla.auto', '0'); if (S.ws) S.ws.close(); };
 
-  // ───────── 로봇 앞 카메라 (로봇 앞쪽 위에서 30° 아래를 봄, 96×72, 가로 70°) ─────────
+  // ───────── AI 카메라 (96×72, 가로 70°) — 시점 3가지 ─────────
+  //   first: 1인칭 — 로봇 앞쪽 위 40mm 에서 30° 아래를 봄 (로봇 자신은 안 보임)
+  //   third: 3인칭 — 로봇 뒤 380mm·위 320mm 에서 로봇 앞 300mm 바닥을 봄, 로봇을 따라다님 (로봇이 보임)
+  //   top:   위에서 — 경기장 가운데 1.8m 위 천장 카메라, 고정 (경기장 전체 + 로봇)
   const CW = 96, CH = 72;
-  let camFor = null, cam = null;
-  const frontCam = () => {
+  const camMode = () => { const m = store('mscad.vla.camera'); return m === 'third' || m === 'top' ? m : 'first'; };
+  let boxFor = null, box = null;
+  const robotBox = () => {
     const R = X.robot; if (!R) return null;
-    if (R === camFor && cam) return cam;
-    camFor = R;
-    let maxZ = 70, maxY = 90, cx = 0;
+    if (R === boxFor && box) return box;
+    boxFor = R; box = { min: new T3.Vector3(-60, 0, -70), max: new T3.Vector3(60, 90, 70) };
     if (R.root && R.inner) {
       R.root.updateMatrixWorld(true);
       const b = new T3.Box3(), v = new T3.Vector3();
@@ -104,15 +110,28 @@
         const bb = o.geometry.boundingBox; if (!bb) return;
         for (let k = 0; k < 8; k++) { v.set(k & 1 ? bb.max.x : bb.min.x, k & 2 ? bb.max.y : bb.min.y, k & 4 ? bb.max.z : bb.min.z).applyMatrix4(o.matrixWorld); R.root.worldToLocal(v); b.expandByPoint(v); }
       });
-      if (!b.isEmpty() && isFinite(b.max.z)) { maxZ = b.max.z; maxY = Math.max(40, b.max.y); cx = (b.min.x + b.max.x) / 2; }
+      if (!b.isEmpty() && isFinite(b.max.z)) box = { min: b.min.clone().setY(Math.max(0, b.min.y)), max: b.max.clone().setY(Math.max(40, b.max.y)) };
     }
-    const a = 30 * Math.PI / 180;
-    cam = { o: new T3.Vector3(cx, maxY + 40, maxZ - 10), d: new T3.Vector3(0, -Math.sin(a), Math.cos(a)) };
-    return cam;
+    return box;
+  };
+  const frontCam = () => {
+    const bx = robotBox(); if (!bx) return null;
+    const cx = (bx.min.x + bx.max.x) / 2, a = 30 * Math.PI / 180;
+    return { o: new T3.Vector3(cx, bx.max.y + 40, bx.max.z - 10), d: new T3.Vector3(0, -Math.sin(a), Math.cos(a)) };
+  };
+  const camView = (w, h) => {
+    const H = window.__husky; if (!H || !H.view) return null;
+    const bx = robotBox(); if (!bx) return null;
+    const m = camMode(), cx = (bx.min.x + bx.max.x) / 2;
+    if (m === 'third') {
+      const o = new T3.Vector3(cx, bx.max.y + 320, bx.min.z - 380), tg = new T3.Vector3(cx, 0, bx.max.z + 300);
+      return H.view({ o, d: tg.sub(o) }, { w, h, fov: 70, robot: bx });
+    }
+    if (m === 'top') return H.view({ o: new T3.Vector3(0, 1800, 0), d: new T3.Vector3(0, -1, 0) }, { w, h, fov: 70, world: true, up: new T3.Vector3(0, 0, -1), robot: bx });
+    return H.view(frontCam(), { w, h, fov: 70 });
   };
   const snap = () => {
-    const H = window.__husky; if (!H || !H.view) return null;
-    const r = H.view(frontCam(), { w: CW, h: CH, fov: 70 }); if (!r) return null;
+    const r = camView(CW, CH); if (!r) return null;
     const c = document.createElement('canvas'); c.width = CW; c.height = CH;
     c.getContext('2d').putImageData(new ImageData(r.img, CW, CH), 0, 0);
     lastImg = c;
@@ -144,7 +163,7 @@
       if (S.st !== 'on') { await api.wbDrive(0, 0); break; }
     }
   };
-  window.__vla = { drive, connect, disconnect, snap, state: S, cam: frontCam, CW, CH, brain, store };
+  window.__vla = { drive, connect, disconnect, snap, state: S, cam: frontCam, view: camView, camMode, CW, CH, brain, store };
 
   // ───────── 주행 기록 (0.1초마다, 프로그램 실행 중) ─────────
   const recOn = () => store('mscad.vla.rec') === '1';
@@ -159,7 +178,7 @@
     if (!S.rec) {
       const mat = U.mat ? U.mat() : null, blk = vlaTask();
       S.rec = { t0: now };
-      send({ type: 'rec_start', meta: { task: blk || '블록 프로그램', mat: mat && (mat.key || mat.label), robot: (C.model && C.model.name) || '', camera: { w: CW, h: CH, fov: 70, tilt: 30 }, action: ['speed_mm_s', 'turn_deg_s'] } });
+      send({ type: 'rec_start', meta: { task: blk || '블록 프로그램', mat: mat && (mat.key || mat.label), robot: (C.model && C.model.name) || '', camera: { mode: camMode(), w: CW, h: CH, fov: 70 }, action: ['speed_mm_s', 'turn_deg_s'] } });
       recLast = { t: now, x: p.x, z: p.z, th: p.th }; return;
     }
     const dt = now - recLast.t; if (dt < 0.05) return;
@@ -224,7 +243,7 @@
 ${help ? `<div class="${S.err ? 'warn' : 'note'}">${esc(help)}</div>` : ''}
 <div class="row"><label><input type="checkbox" id="vlaRec" ${recOn() ? 'checked' : ''} ${S.st === 'on' ? '' : 'disabled'}> ${t('⏺ 주행 기록 (학습 데이터로 PC 에 저장)')}</label></div>
 ${S.recMsg ? `<div class="note">${esc(S.recMsg)}</div>` : ''}
-<div class="note">${t('로봇 앞 카메라')}</div><canvas width="192" height="144"></canvas><div class="note" id="vlaNote"></div>`;
+<div class="note">${t('AI 카메라')} · ${t({ first: '1인칭 (로봇 눈)', third: '3인칭 (뒤에서 따라가기)', top: '위에서 (천장 카메라)' }[camMode()])}</div><canvas width="192" height="144"></canvas><div class="note" id="vlaNote"></div>`;
       cv = wrap.querySelector('canvas');
       wrap.querySelector('#vlaConn').onclick = () => (S.st === 'idle' ? connect() : disconnect());
       wrap.querySelector('#vlaRec').onchange = e => { store('mscad.vla.rec', e.target.checked ? '1' : '0'); S.recMsg = ''; };

@@ -216,17 +216,39 @@ ${[-40, -20, 0, 20, 40].map(x => `1 0 ${x} 10.05 0 6 0 0 0 1 0 0 0 6 4-4disc.dat
   };
   installGen(); setInterval(installGen, 2000); // 워드블럭 동기화가 생성기를 다시 정의해도 되돌림
 
-  // 아무 자리의 카메라 그림 (vla.js 의 로봇 앞 카메라) — cam: { o, d } 로봇 좌표(THREE.Vector3), opt: { pose, w, h, fov }
+  // 아무 자리의 카메라 그림 (vla.js · bc.js 의 AI 카메라)
+  //   cam: { o, d } — 기본은 로봇 좌표(THREE.Vector3), opt.world 면 경기장 좌표(천장 카메라)
+  //   opt: { pose, w, h, fov, world, up(화면 위쪽 방향), robot: { min, max } (로봇 좌표 상자 — 3인칭·위에서 볼 때 로봇 자신을 그림) }
+  //   로봇 몸은 보라, 앞쪽 30% 는 노랑 (어느 쪽을 보는지 알 수 있게)
   const view = (cam, opt) => {
     const R = X.robot; if (!R || !cam) return null; opt = opt || {};
     const w = opt.w || 96, h = opt.h || 72, th = Math.tan((opt.fov || 70) * Math.PI / 360), tv = th * h / w;
-    const O = toWorld(R, cam.o, false, opt.pose), F = toWorld(R, cam.d, true, opt.pose).normalize();
-    const up0 = Math.abs(F.y) > .95 ? new T3.Vector3(0, 0, 1) : new T3.Vector3(0, 1, 0);
+    const O = opt.world ? cam.o.clone() : toWorld(R, cam.o, false, opt.pose), F = (opt.world ? cam.d.clone() : toWorld(R, cam.d, true, opt.pose)).normalize();
+    const up0 = opt.up ? opt.up.clone() : Math.abs(F.y) > .95 ? new T3.Vector3(0, 0, 1) : new T3.Vector3(0, 1, 0);
     const right = new T3.Vector3().crossVectors(F, up0).normalize(), up = new T3.Vector3().crossVectors(right, F).normalize();
+    let RB = null;
+    if (opt.robot) {
+      const V3 = (x, y, z) => new T3.Vector3(x, y, z), b = opt.robot;
+      RB = { o0: toWorld(R, V3(0, 0, 0), false, opt.pose), ex: toWorld(R, V3(1, 0, 0), true, opt.pose).normalize(), ey: toWorld(R, V3(0, 1, 0), true, opt.pose).normalize(), ez: toWorld(R, V3(0, 0, 1), true, opt.pose).normalize(), mn: b.min, mx: b.max, front: b.max.z - (b.max.z - b.min.z) * 0.3 };
+      RB.ox = O.clone().sub(RB.o0);
+    }
+    const hitRobot = D => {
+      const o = [RB.ox.dot(RB.ex), RB.ox.dot(RB.ey), RB.ox.dot(RB.ez)], d = [D.dot(RB.ex), D.dot(RB.ey), D.dot(RB.ez)], mn = [RB.mn.x, RB.mn.y, RB.mn.z], mx = [RB.mx.x, RB.mx.y, RB.mx.z];
+      let t0 = -Infinity, t1 = Infinity;
+      for (let a = 0; a < 3; a++) {
+        if (Math.abs(d[a]) < 1e-9) { if (o[a] < mn[a] || o[a] > mx[a]) return null; continue; }
+        let ta = (mn[a] - o[a]) / d[a], tb = (mx[a] - o[a]) / d[a]; if (ta > tb) { const q = ta; ta = tb; tb = q; }
+        if (ta > t0) t0 = ta; if (tb < t1) t1 = tb; if (t0 > t1) return null;
+      }
+      if (t1 < 0) return null; const tt = Math.max(t0, 0);
+      return { t: tt, front: o[2] + d[2] * tt > RB.front };
+    };
     const img = new Uint8ClampedArray(w * h * 4), D = new T3.Vector3();
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
       D.copy(F).addScaledVector(right, ((i + .5) / w * 2 - 1) * th).addScaledVector(up, (1 - (j + .5) / h * 2) * tv).normalize();
-      const c = shoot(O, D).c, k = (j * w + i) * 4; img[k] = c[0]; img[k + 1] = c[1]; img[k + 2] = c[2]; img[k + 3] = 255;
+      const hit = shoot(O, D); let c = hit.c;
+      if (RB) { const r = hitRobot(D); if (r) { const tg = D.y < -1e-6 ? -O.y / D.y : Infinity; if (r.t < tg || hit.none) c = r.front ? [255, 196, 0] : [126, 87, 194]; } }
+      const k = (j * w + i) * 4; img[k] = c[0]; img[k + 1] = c[1]; img[k + 2] = c[2]; img[k + 3] = 255;
     }
     return { w, h, img };
   };
