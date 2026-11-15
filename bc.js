@@ -27,7 +27,7 @@
     '아직 가르친 모델이 없어요 — 학습 창에서 먼저 학습시키세요': 'No trained model yet — train it first in the training window',
     '처음 듣는 낱말': 'unknown words', '지우기': 'Delete', '정말 모든 시범과 모델을 지울까요?': 'Delete all demonstrations and the model?',
     '시범이 너무 적어요 (최소 30장면)': 'Too few scenes (at least 30)', '장면을 모으는 중': 'collecting scenes', '이번에 모은 장면': 'scenes this run',
-    '학습 끝': 'Training done', 'AI 카메라': 'AI camera', '1인칭 (로봇 눈)': '1st person (robot eye)', '3인칭 (뒤에서 따라가기)': '3rd person (follows from behind)', '위에서 (천장 카메라)': 'Top (ceiling camera)', '카메라': 'Camera',
+    '학습 끝': 'Training done', '🔍 AI 속 들여다보기': '🔍 Look inside the AI', 'AI 카메라': 'AI camera', '1인칭 (로봇 눈)': '1st person (robot eye)', '3인칭 (뒤에서 따라가기)': '3rd person (follows from behind)', '위에서 (천장 카메라)': 'Top (ceiling camera)', '카메라': 'Camera',
     '이 모델은 이 카메라로 배웠어요': 'This model learned with this camera', '카메라를 바꾸거나 다시 학습하세요': 'switch the camera or train again',
     'cam.tip': 'The camera decides what the AI sees. Scenes and models are kept separately for each camera — teach and train again after switching.', '파일을 열 수 없습니다': 'Cannot open the file', '닫기': 'Close',
   };
@@ -107,6 +107,16 @@
     return { h, p: z, Wk, ws };
   };
   const predict = (img, task, th) => forward(B.model, feat(img, task, th)).p;
+  // 속 들여다보기(vlaviz.js): 한 번의 결정을 단계별로 — 숨은 칸, 확률, 주목한 곳(고른 행동 점수가 그림 칸마다 얼마나 민감한지), 다른 지시였다면
+  const inspect = (img, task, th) => {
+    const m = B.model; if (!m || !img) return null;
+    const x = feat(img, task, th), f = forward(m, x); let a = 0; for (let k = 1; k < NA; k++) if (f.p[k] > f.p[a]) a = k;
+    const G = new Float32Array(NI);
+    for (let j = 0; j < NH; j++) { const g = f.Wk[a * NH + j] * (1 - f.h[j] * f.h[j]); if (!g) continue; const o = j * NIN; for (let i = 0; i < NI; i++) G[i] += g * m.W1[o + i]; }
+    const sal = new Float32Array(EW * EH); for (let k = 0; k < EW * EH; k++) sal[k] = Math.abs(G[k * 3]) + Math.abs(G[k * 3 + 1]) + Math.abs(G[k * 3 + 2]);
+    const cf = (m.tasks || []).map(tk => { const q = forward(m, feat(img, tk, th)).p; let b = 0; for (let k = 1; k < NA; k++) if (q[k] > q[b]) b = k; return { task: tk, a: b, p: q[b] }; });
+    return { h: f.h, p: f.p, a, sal, cf, words: words(task).map(w => ({ w, known: (m.vocab || []).includes(w) })) };
+  };
 
   // 학습 (Adam, 묶음 32, 클래스 균형 가중치, 20% 는 "처음 보는 장면"으로 남김)
   const train = async (rounds, onRound) => {
@@ -180,7 +190,7 @@
     try {
       while (X.simRunning) {
         const img = eye(), a = keyAct(), p0 = U.pose();
-        B.live = { img, a, p: null };
+        B.live = { img, a, p: null, task, th: p0 ? p0.th : 0, teach: true }; B.ticks = (B.ticks || 0) + 1;
         if (a >= 0 && img) { B.data.push({ task, a, img, cam: V.camMode(), th: p0 ? p0.th : 0 }); B.runN++; }
         if (a !== last) { const v = ACT[a < 0 ? 0 : a]; await api.wbDrive(v[0], v[1]); last = a; }
         await api.wait(0.1);
@@ -198,12 +208,12 @@
     while (X.simRunning) {
       const img = eye(); if (!img) { await api.wait(0.1); continue; }
       const P0 = U.pose(), p = predict(img, task, P0 ? P0.th : 0); let a = 0; for (let k = 1; k < NA; k++) if (p[k] > p[a]) a = k;
-      B.live = { img, a, p };
+      B.live = { img, a, p, task, th: P0 ? P0.th : 0 }; B.ticks = (B.ticks || 0) + 1;
       if (a !== last) { await api.wbDrive(ACT[a][0], ACT[a][1]); last = a; }
       await api.wait(0.1);
     }
   };
-  window.__bc = { teach, drive, state: B, eye, predict, keys: B.keys, train: async r => { B.training = true; try { B.model = await train(r || 40); await saveModel(); return B.model.acc; } finally { B.training = false; draw(true); } } };
+  window.__bc = { teach, drive, state: B, eye, predict, inspect, ACT, ANAME, AICON, EW, EH, NH, t, words, keys: B.keys, train: async r => { B.training = true; try { B.model = await train(r || 40); await saveModel(); return B.model.acc; } finally { B.training = false; draw(true); } } };
 
   // ───────── 블록 「🎮 운전해서 가르치기 · 지시: …」 ─────────
   Bly.Blocks.rm_vla_teach = {
@@ -262,7 +272,7 @@
 <div class="row">${t('AI 카메라')}: <select id="bcCam">${['first', 'third', 'top'].map(k => `<option value="${k}">${CAMI[k]} ${t(CAMN[k])}</option>`).join('')}</select></div>
 <div class="row">${t('VLA 두뇌')}: <select id="bcBrain"><option value="mine">${t('내가 가르친 모델')}</option><option value="helper">${t('PC 도우미')}</option></select></div>
 <div class="row">${esc(summary())}${B.teaching ? ` · ⏺ ${t('장면을 모으는 중')} ${B.runN}` : ''}</div>
-<div class="row"><button id="bcOpen">${t('학습 창 열기')}</button></div>
+<div class="row"><button id="bcOpen">${t('학습 창 열기')}</button><button id="bcViz">${t('🔍 AI 속 들여다보기')}</button></div>
 ${B.note ? `<div class="note">${esc(B.note)}</div>` : ''}
 ${B.teaching ? `<div class="bcPad"><span></span><button data-k="u">▲</button><span></span><button data-k="l">◀</button><button data-k="s">■</button><button data-k="r">▶</button></div>` : ''}
 <div class="note">${t('AI의 눈')} (24×18) · ${CAMI[V.camMode()]} ${t(CAMN[V.camMode()])}</div><div class="bcLive"><canvas class="bcEye" width="144" height="108"></canvas><div class="bcBars"></div></div>`;
@@ -271,6 +281,7 @@ ${B.teaching ? `<div class="bcPad"><span></span><button data-k="u">▲</button><
       wrap.querySelector('#bcCam').onchange = e => { store('mscad.vla.camera', e.target.value); draw(true); if (dlg && !dlg.hidden) drawDlg(); };
       wrap.querySelector('#bcBrain').onchange = e => { store('mscad.vla.brain', e.target.value); draw(true); };
       wrap.querySelector('#bcOpen').onclick = () => openDlg();
+      wrap.querySelector('#bcViz').onclick = () => window.__vlaviz && window.__vlaviz.open();
       wrap.querySelectorAll('.bcPad button').forEach(b => {
         const k = b.dataset.k, on = e => { e.preventDefault(); B.keys.add(k); }, off = () => B.keys.delete(k);
         b.onpointerdown = on; b.onpointerup = off; b.onpointerleave = off; b.onpointercancel = off;
