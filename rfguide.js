@@ -5,7 +5,7 @@
 //   · 단계마다 경기장에 경로(주황 점선)를 그리고, 아래 코드 상자에 Pybricks 코드를 보여 줍니다.
 //     "▶ 여기까지 블록 넣기" = 처음부터 그 단계까지의 블록 프로그램을 작업 공간에 넣습니다 (Ctrl+Z 로 되돌리기).
 //   · umc.js 의 STEPS[6] 이 window.__rfGuide.wrap(규정 설명, 경기장, 배치) 를 부르고, hiDraw 가 단계의 path 를 그립니다.
-//   · 기본 RF Robot(부착물 없음)으로 시뮬레이터 간단 모드에서 확인한 점수: 주니어 84점 · 시니어 84점 (그릇 10점, 강아지 공원 6점은 C 모터 부착물 필요).
+//   · 기본 RF Robot(부착물 없음)으로 시뮬레이터 간단 모드에서 확인한 점수: 팔 없는 RF Robot 84점, C 모터 팔을 단 RF Robot 90점 (강아지를 팔로 끌어 공원으로; 그릇 10점은 못 함).
 (() => {
   'use strict';
   const U = window.__umc; if (!U) return;
@@ -19,7 +19,7 @@
 
   // ───── 경로 계획 (경기장 좌표 mm: x = 서쪽 끝에서 동쪽으로, y = 북쪽 끝에서 남쪽으로) ─────
   // op: [종류, ...값, 주석[ko,en]]  — fwd(mm, 뒤로는 -) · turn(도, 오른쪽 +) · wait(초) · drive(mm/s, 도/s) · until(포트, 값) · stop · reset · setx · show(값|'x3')
-  function plan(l, jr) {
+  function plan(l, jr, arm) {
     let x = l.X * 10, y = 375, h = HEAD[l.ori];
     const steps = []; let cur = null;
     const step = key => { cur = { key, ops: [], path: [[x, y]] }; steps.push(cur); };
@@ -51,10 +51,21 @@
     step('dog');
     toX(650, ['뒤로 (돌 때 디스펜서 받침에 닿지 않게)', 'back up (so the turn clears the dispenser base)']);
     face(1); toY(300); face(2); toX(260); face(3); toY(100); face(2);
-    toX(81.4 + FR, ['강아지를 서쪽으로 4.3cm 밀기', 'push the dog 4.3 cm west']);
-
-    step('litter');
-    toX(260, ['뒤로', 'back up']); face(1); toY(300); face(0);
+    if (arm) { // C 모터 팔: 강아지 뒤로 팔을 내려 걸고, 공원까지 데려감
+      toX(100 + 37.5 + FR, ['강아지 동쪽 면에 로봇 앞이 닿을 때까지', 'until the robot front touches the dog']);
+      op('arm', 30, ['팔 내리기: 가로대가 강아지 뒤(서쪽)로 내려와 걸림', 'arm down: the crossbar drops behind the dog and hooks it']);
+      toX(260, ['뒤로: 강아지를 끌고 나옴', 'back: drag the dog out']);
+      face(1); toY(600, ['남쪽으로: 우편함 동쪽(x=26cm)으로 지나감', 'south: pass east of the mailboxes (x = 26 cm)']);
+      face(2); toX(150 + 37.5 + FR, ['서쪽으로: 강아지 중심이 공원 가운데(15cm)', 'west: dog centre at the park centre (15 cm)']);
+      op('arm', 0, ['팔 올리기: 강아지를 놓음', 'arm up: release the dog']);
+      toX(330, ['뒤로 (돌 때 강아지에 닿지 않게)', 'back up (so the turn clears the dog)']);
+      step('litter');
+      face(3); toY(300); face(0);
+    } else {
+      toX(81.4 + FR, ['강아지를 서쪽으로 4.3cm 밀기', 'push the dog 4.3 cm west']);
+      step('litter');
+      toX(260, ['뒤로', 'back up']); face(1); toY(300); face(0);
+    }
     toX(1000, ['y 30cm 줄로 동쪽 (사료·배설물을 건드리지 않음)', 'east along y 30 cm (clear of food and debris)']);
     face(3); toY(215); face(0); toX(1140);
     face(3); toY(-5 + FR, ['북쪽으로 밀기: 앞 끝이 가장자리 0.5cm 밖', 'push north: front edge 0.5 cm past the edge']);
@@ -120,6 +131,7 @@
       case 'drive': return { type: 'rm_drive_drive', inputs: { SPEED: num(a[0]), TURN: num(a[1]) } };
       case 'stop': return { type: 'rm_drive_stop' };
       case 'reset': return { type: 'rm_drive_reset' };
+      case 'arm': return { type: 'rm_motor_target', fields: { PORT: 'C' }, inputs: { SPEED: num(30), ANGLE: num(a[0]) } };
       case 'until': return { type: 'rm_wait_until', inputs: { COND: { block: { type: 'logic_compare', id: id(), fields: { OP: 'LT' }, inputs: { A: { block: { type: 'rm_color_value', id: id(), fields: { PORT: a[0], WHAT: 'reflection' } } }, B: num(a[1]) } } } } };
       case 'setx': return { type: 'variables_set', fields: { VAR: { id: XVAR.id } }, inputs: { VALUE: arith('DIVIDE', arith('ADD', { block: { type: 'rm_drive_value', id: id(), fields: { WHAT: 'distance' } } }, num(LINE_X)), num(10)) } };
       case 'show': return { type: 'rm_display_number', inputs: { NUM: a[0] === 'x3' ? arith('DIVIDE', arith('POWER', { block: { type: 'variables_get', id: id(), fields: { VAR: { id: XVAR.id } } } }, num(3)), num(100)) : num(a[0]) } };
@@ -147,6 +159,7 @@ motor_E = Motor(Port.E, Direction.CLOCKWISE)         # ${L('오른쪽 바퀴', '
 drive_base = DriveBase(motor_A, motor_E, wheel_diameter=56, axle_track=176)
 color_B = ColorSensor(Port.B)  # ${L('왼쪽 컬러 센서', 'left colour sensor')}
 color_D = ColorSensor(Port.D)  # ${L('오른쪽 컬러 센서', 'right colour sensor')}
+motor_C = Motor(Port.C)        # ${L('팔 (0 = 올림, 30 = 내림)', 'arm (0 = up, 30 = down)')}
 `;
   const fmt = v => (Number.isInteger(v) ? String(v) : String(+v.toFixed(1)));
   function pyLines(ops) {
@@ -163,6 +176,7 @@ color_D = ColorSensor(Port.D)  # ${L('오른쪽 컬러 센서', 'right colour se
         case 'drive': s = `drive_base.drive(${a[0]}, ${a[1]})`; break;
         case 'stop': s = 'drive_base.stop()'; break;
         case 'reset': s = 'drive_base.reset()'; break;
+        case 'arm': s = `motor_C.run_target(300, ${a[0]})`; break;
         case 'until': out.push(`while not (color_${a[0]}.reflection() < ${a[1]}):` + c(o)); out.push('    wait(10)'); continue;
         case 'setx': s = `x = (drive_base.distance() + ${LINE_X}) / 10`; break;
         case 'show': s = a[0] === 'x3' ? 'hub.display.number(x ** 3 / 100)' : `hub.display.number(${a[0]})`; break;
@@ -182,7 +196,7 @@ color_D = ColorSensor(Port.D)  # ${L('오른쪽 컬러 센서', 'right colour se
   let CUR = null; // 지금 보여 주는 단계 목록 (코드 상자·블록 넣기에서 씀)
   function wrap(rules, m, l) {
     try {
-      const jr = m.div === 'jr', st = plan(l, jr), by = k => st.find(s => s.key === k);
+      const jr = m.div === 'jr', arm = hasArm(), st = plan(l, jr, arm), by = k => st.find(s => s.key === k);
       const ri = i => rules[i] || ['', '', null];
       const ans = jr ? (l.q ? l.X - 50 : l.turns) : null;
       const steps = [];
@@ -191,7 +205,7 @@ color_D = ColorSensor(Port.D)  # ${L('오른쪽 컬러 센서', 'right colour se
       add(ri(1)[0], ri(1)[1], ri(1)[2]);
       add(L('RF Robot 준비', 'RF Robot setup'), P(
         rb(L('수업 도면 <b>robofest27/RF Robot</b>으로 풉니다. 부착물 없이 몸통 앞면으로 밀어서 하는 풀이입니다.', 'Solved with the class file <b>robofest27/RF Robot</b>, pushing with the chassis front (no attachment).')),
-        L('· 포트: 왼쪽 바퀴 <b>A</b>, 오른쪽 바퀴 <b>E</b>, 위쪽 모터 C(부착물용 — 이 풀이에서는 안 씀), 컬러 센서 왼쪽 <b>B</b>·오른쪽 <b>D</b>', '· Ports: left wheel <b>A</b>, right wheel <b>E</b>, top motor C (for attachments, unused here), colour sensors left <b>B</b> · right <b>D</b>'),
+        L('· 포트: 왼쪽 바퀴 <b>A</b>, 오른쪽 바퀴 <b>E</b>, 위쪽 모터 <b>C</b>(팔 — #3 강아지에서 씀), 컬러 센서 왼쪽 <b>B</b>·오른쪽 <b>D</b>', '· Ports: left wheel <b>A</b>, right wheel <b>E</b>, top motor <b>C</b> (arm, used for #3 the dog), colour sensors left <b>B</b> · right <b>D</b>'),
         L('· 크기: 폭 20cm, 바퀴 축에서 앞 4.4cm · 뒤 7.6cm. 바퀴 지름 56mm, 바퀴 간격 176mm', '· Size: 20 cm wide, 4.4 cm in front of the wheel axle and 7.6 cm behind. Wheel 56 mm, track 176 mm'),
         L('· 좌표: 서쪽 끝에서 x, 북쪽 끝에서 y. 회전은 오른쪽 +, 왼쪽 −. 로봇 중심 = 두 바퀴 가운데', '· Coordinates: x from the west edge, y from the north edge. Turns: right +, left −. Robot centre = between the wheels'),
         L(`· 첫 회전: UTF 시작 방향 북 0 · 동 −90 · 남 180 · 서 90 (이번 UTF: ${DIRN[HEAD[l.ori]][0]}쪽)`, `· First turn: UTF start north 0 · east −90 · south 180 · west 90 (now: ${DIRN[HEAD[l.ori]][1]})`),
@@ -201,10 +215,12 @@ color_D = ColorSensor(Port.D)  # ${L('오른쪽 컬러 센서', 'right colour se
         rb(L('북쪽으로 y=20cm → 서쪽으로 가다가 <b>오른쪽 센서 D</b>가 디스펜서 앞 검은 선을 보면 멈춤. 이 자리(로봇 중심 x=54.2cm)를 기준으로 삼으면 출발선 X 와 상관없이 다음 경로가 늘 같습니다. 2.6cm 뒤로 가면 로봇 앞 끝이 배출구 아래 점선 자리에 걸치고(받침에는 안 닿음), 6초 동안 사료 10개가 로봇 앞에 떨어집니다 (꺼냄 10점).', 'North to y = 20 cm, then west until the <b>right sensor D</b> sees the black line in front of the dispenser. From this spot (robot centre x = 54.2 cm) the rest of the route is the same whatever X is. Back 2.6 cm: the front edge is over the dotted zone (not touching the base) and the 10 food pieces drop in front within 6 s (10 points).')),
         jr ? '' : L('<b>시니어</b>: 선까지 간 거리 + 54.2cm = 출발선 위치 x(cm) → 변수 x 에 저장해 종료 과제에 씁니다.', '<b>Senior</b>: distance to the line + 54.2 cm = start line x (cm), kept in the variable x for the ending task.'),
         dim(L('그릇에 넣기(10점)는 못 함: 사료가 받침 바로 앞에 떨어져 몸통으로 밀려면 로봇이 받침 위를 지나가야 합니다 → C 모터에 쓸어 담는 부착물이 필요합니다.', 'Not done: into the bowl (10). The food lands right in front of the base, so pushing it with the body would cross the base → needs a sweeper on motor C.'))), [[470, 93, 530, 130], [480, 100, 660, 300]], 'food');
-      add(L('#3 강아지 (부분 점수)', '#3 Dog (partial)'), P(
+      add(arm ? L('#3 강아지 → 공원 (C 모터 팔)', '#3 Dog → park (motor C arm)') : L('#3 강아지 (부분 점수)', '#3 Dog (partial)'), P(
         dim(ri(4)[1]),
-        rb(L('강아지 북쪽은 가장자리까지 6cm 뿐이라 로봇(앞 4.4 + 뒤 7.6cm)이 들어가 남쪽으로 밀 수 없습니다. 동쪽에서 서쪽으로 4.3cm 밀어 "움직임" 4점, 우편함 2개는 멀리 돌아가 안 건드려 4점 = 8점.', 'The dog is only 6 cm from the north edge, so the robot (4.4 + 7.6 cm long) cannot get behind it to push it south. Push it 4.3 cm west from the east: "moved" 4, both mailboxes untouched 4 = 8 points.')),
-        dim(L('공원까지(10점)는 C 모터 팔로 강아지를 남쪽으로 끌어오는 부착물이 필요합니다.', 'To the park (10) needs an arm on motor C that drags the dog south.'))), [[40, 50, 300, 150], [60, 320, 140, 530]], 'dog');
+        arm ? rb(L('강아지 북쪽은 가장자리까지 6cm 뿐이라 뒤에서 밀 수 없으므로 <b>C 모터 팔</b>로 끌어옵니다. 동쪽에서 다가가 로봇 앞이 강아지에 닿으면 팔을 30도 내립니다 → 가로대가 강아지 뒤(서쪽)로 내려와 걸립니다. 그대로 뒤로 나와 x=26cm 줄로 남쪽으로 내려가면(우편함은 x=10cm — 안 건드림) 강아지가 로봇 앞과 가로대 사이에 끼여 함께 옵니다. y=60cm 에서 서쪽으로 가 강아지 중심을 공원 가운데에 놓고 팔을 올린 뒤 뒤로 빠집니다 (10점 + 우편함 4점).', 'The dog is only 6 cm from the north edge, so it cannot be pushed from behind: drag it with the <b>motor C arm</b>. Come from the east until the front touches the dog and lower the arm 30°: the crossbar drops behind the dog. Back out and go south along x = 26 cm (mailboxes are at x = 10 cm) with the dog held between the front and the crossbar. At y = 60 cm go west, put the dog on the park centre, raise the arm and back away (10 + mailboxes 4).'))
+          : rb(L('강아지 북쪽은 가장자리까지 6cm 뿐이라 로봇(앞 4.4 + 뒤 7.6cm)이 들어가 남쪽으로 밀 수 없습니다. 동쪽에서 서쪽으로 4.3cm 밀어 "움직임" 4점, 우편함 2개는 멀리 돌아가 안 건드려 4점 = 8점.', 'The dog is only 6 cm from the north edge, so the robot cannot get behind it. Push it 4.3 cm west: "moved" 4, mailboxes untouched 4 = 8 points.')),
+        arm ? dim(L('팔 가로대와 로봇 앞 사이는 약 5cm, 강아지 폭은 4.9cm 로 여유가 거의 없습니다 — 실제 로봇은 팔을 1칸 길게 하면 안전합니다. 시뮬레이터(간단 모드)는 팔이 내려와 있는 동안 그 사이의 물체를 로봇과 함께 옮깁니다.', 'The gap between the crossbar and the robot front is about 5 cm and the dog is 4.9 cm wide — one stud longer is safer on a real robot. The simulator (simple mode) carries an object held there while the arm is down.'))
+          : dim(L('공원까지(10점)는 C 모터에 팔을 달면 됩니다 — 팔을 단 RF Robot 을 열면 이 단계가 팔 풀이로 바뀝니다.', 'To the park (10): add an arm on motor C — open an RF Robot with the arm and this step switches to the arm solution.'))), arm ? [[40, 50, 300, 150], [100, 550, 200, 650]] : [[40, 50, 300, 150], [60, 320, 140, 530]], 'dog');
       add(L('#2 화장실 청소', '#2 Litter box'), P(
         dim(ri(3)[1]),
         rb(L('y=30cm 줄로 동쪽으로 가서(사료·배설물을 건드리지 않음) x=114cm 에서 북쪽을 보고 밀면, 폭 20cm 앞면이 배설물 3개(112~122cm)를 한꺼번에 가장자리 밖 화장실로 밉니다 (9점). 그릇 벽 가까이에서 돌면 걸리므로 y=21.5cm 에서 돕니다.', 'Go east along y = 30 cm (clear of food and debris), face north at x = 114 cm and push: the 20 cm front sweeps all 3 debris (112–122 cm) over the edge into the litter box (9). Turn at y = 21.5 cm so the turn clears the bowl wall.'))), [[1040, 0, 1240, 260]], 'litter');
@@ -226,8 +242,8 @@ color_D = ColorSensor(Port.D)  # ${L('오른쪽 컬러 센서', 'right colour se
           : rb(L('미용실에 고양이를 민 뒤 2cm 더 가서 앞 끝을 남쪽 가장자리 밖에 걸치고 멈춤 (8점). #1 에서 잰 x 로 x³ ÷ 100 을 계산해 보여 줌 (8점).', 'After the groomer push, 2 cm more so the front is past the south edge, then stop (8). Show x³ ÷ 100 with the x measured in #1 (8).'))),
         jr ? [[l.X * 10 - 120, 500, l.X * 10 + 30, 700]] : [[420, 600, 580, 750]], 'end');
       add(L('점수 정리', 'Score summary'), P(
-        rb(L('예상 점수 (시뮬레이터 간단 모드): #1 꺼냄 10 · #2 9 · #3 움직임 4 + 우편함 4 · #4 10 · #5 10 · #6 10 · #7 16 · #8 로봇 온전 11 = <b>84 / 100</b>, 약 55~60초 (2분 안에 여유 있음).', 'Expected (simulator simple mode): #1 out 10 · #2 9 · #3 moved 4 + mailboxes 4 · #4 10 · #5 10 · #6 10 · #7 16 · #8 intact 11 = <b>84 / 100</b>, about 55–60 s (well inside 2 min).')),
-        L('· 더 받으려면 C 모터 부착물: 사료를 쓸어 그릇에 담기(+10), 강아지를 공원으로 끌기(+6)', '· For more, build an attachment on motor C: sweep the food into the bowl (+10), drag the dog to the park (+6)'),
+        rb(L(`예상 점수 (시뮬레이터 간단 모드): #1 꺼냄 10 · #2 9 · ${arm ? '#3 공원 10' : '#3 움직임 4'} + 우편함 4 · #4 10 · #5 10 · #6 10 · #7 16 · #8 로봇 온전 11 = <b>${arm ? 90 : 84} / 100</b>, 약 55~60초 (2분 안에 여유 있음).`, `Expected (simulator simple mode): #1 out 10 · #2 9 · ${arm ? '#3 park 10' : '#3 moved 4'} + mailboxes 4 · #4 10 · #5 10 · #6 10 · #7 16 · #8 intact 11 = <b>${arm ? 90 : 84} / 100</b>, about 55–60 s (well inside 2 min).`)),
+        arm ? L('· 남은 10점: 사료를 그릇에 담기 (쓸어 담는 부착물 필요)', '· The last 10: food into the bowl (needs a sweeper)') : L('· 더 받으려면 C 모터 부착물: 사료를 쓸어 그릇에 담기(+10), 강아지를 공원으로 끌기(+6)', '· For more, build an attachment on motor C: sweep the food into the bowl (+10), drag the dog to the park (+6)'),
         L('· 실제 로봇은 미끄러짐이 있으므로 검은 선·가장자리를 센서로 찾아 위치를 자주 맞추면 더 안정적입니다', '· A real robot slips, so re-checking the position on black lines and edges with the sensors makes it steadier'),
         dim(ri(9)[1])), null);
       CUR = { st, steps, l, jr, key: m.key };
@@ -258,7 +274,7 @@ color_D = ColorSensor(Port.D)  # ${L('오른쪽 컬러 센서', 'right colour se
     const b = mountBox(); if (!b) return;
     const m = U.mat && U.mat(), i = stepIdx();
     const s = CUR && m && m.key === CUR.key && i >= 0 ? CUR.steps[i] : null, key = s && s[3] && s[3].key;
-    const sig = key ? [key, CUR.key, JSON.stringify(CUR.l), lang(), robotOk()].join('|') : '';
+    const sig = key ? [key, CUR.key, JSON.stringify(CUR.l), lang(), robotOk(), hasArm()].join('|') : '';
     if (sig === shown) return; shown = sig;
     if (!key) { b.hidden = true; b.innerHTML = ''; return; }
     const st = CUR.st.find(x => x.key === key);
@@ -299,5 +315,66 @@ color_D = ColorSensor(Port.D)  # ${L('오른쪽 컬러 센서', 'right colour se
   }
   setInterval(render, 300);
 
-  window.__rfGuide = { wrap, plan, program, pyLines, load, cumOps, robotOk, get cur() { return CUR; } };
+  // ───── C 모터 팔 (간단 모드) ─────
+  // · 로봇 바닥 사각형(밀기·채점에 쓰는 half)은 팔을 뺀 몸통만으로 잡습니다 (팔은 물체 위로 지나가므로).
+  // · 팔 끝(축에서 가장 먼 부품)이 물체 높이보다 낮게 내려와 있고 물체가 로봇 앞과 팔 끝 사이에 있으면,
+  //   팔이 올라갈 때까지 그 물체는 로봇과 함께 움직입니다 (끌기·옮기기의 근사). Robofest 경기장에서만.
+  const T3 = () => window.__cad && window.__cad.THREE;
+  const armRig = () => { try { const rs = (window.__simRigObjs && window.__simRigObjs()) || []; return rs.filter(r => r.port === 'C' && r.n >= 6).sort((a, b) => b.n - a.n)[0] || null; } catch (e) { return null; } };
+  function hasArm() { return !!armRig(); }
+  let armFor = null, armTip = null, held = new Map();
+  const setupArm = (R, rig) => {
+    const T = T3(); armFor = R; armTip = null; held = new Map();
+    if (!rig || !R || !R.root) return;
+    R.root.updateMatrixWorld(true);
+    const inv = new T.Matrix4().copy(R.root.matrixWorld).invert();
+    // 팔 끝: 축에서 가장 먼 부품
+    const pw = rig.pivot.getWorldPosition(new T.Vector3()); let best = null, bd = -1;
+    const inner = rig.pivot.children[0];
+    for (const ch of (inner ? inner.children : [])) { const bb = new T.Box3().setFromObject(ch); if (bb.isEmpty()) continue; const c = bb.getCenter(new T.Vector3()).sub(pw); c.addScaledVector(rig.axis.clone().transformDirection(rig.pivot.parent.matrixWorld), -c.dot(rig.axis.clone().transformDirection(rig.pivot.parent.matrixWorld))); const d = c.length(); if (d > bd) { bd = d; best = ch; } }
+    armTip = best;
+    // 몸통만의 바닥 사각형
+    const armSet = new Set(); rig.pivot.traverse(o => armSet.add(o));
+    const box = new T.Box3(), v = new T.Vector3();
+    R.root.traverse(o => { if (!o.isMesh || !o.geometry || armSet.has(o)) return; o.geometry.computeBoundingBox(); const b = o.geometry.boundingBox; if (!b) return; const m = new T.Matrix4().multiplyMatrices(inv, o.matrixWorld);
+      for (let i = 0; i < 8; i++) { v.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyMatrix4(m); box.expandByPoint(v); } });
+    if (!box.isEmpty()) { R.__half0 = R.__half0 || R.half; R.__halfBody = { x0: box.min.x, x1: box.max.x, z0: box.min.z, z1: box.max.z }; }
+  };
+  const armTick = () => { requestAnimationFrame(armTick); armStep(); };
+  // 화면마다 + 프로그램이 명령을 내릴 때마다(팔을 내린 직후·올린 직후를 놓치지 않도록) 부릅니다
+  const armStep = () => {
+    try {
+      const T = T3(), R = U.robot && U.robot(), m = U.mat && U.mat(); if (!T || !R || !R.root) return;
+      const rig = armRig();
+      if (R !== armFor || (rig && armTip && !armTip.parent)) setupArm(R, rig);
+      const on = !!(rig && m && m.umc === 6 && !(U.phys && U.phys()));
+      if (R.__halfBody) R.half = on ? R.__halfBody : R.__half0;
+      if (!on || !armTip) { held.clear(); return; }
+      const ps = U.props(), P = U.pose(); if (!ps) return;
+      // 팔 각도·로봇 위치를 지금 값으로 (화면은 다음 프레임에야 바뀌므로)
+      try { const M = window.__cad.ext.motors(), deg = (M.C && M.C.pos) || 0; rig.pivot.quaternion.setFromAxisAngle(rig.axis, -deg * (rig.k == null ? 1 : rig.k) * Math.PI / 180); } catch (e) { }
+      if (!(U.sim() && U.sim().fell)) { R.root.position.set(P.x, 0, P.z); R.root.rotation.set(0, P.th, 0); }
+      R.root.updateMatrixWorld(true);
+      const inv = new T.Matrix4().copy(R.root.matrixWorld).invert(), bb = new T.Box3().setFromObject(armTip), v = new T.Vector3(), lb = new T.Box3();
+      for (let i = 0; i < 8; i++) lb.expandByPoint(v.set(i & 1 ? bb.max.x : bb.min.x, i & 2 ? bb.max.y : bb.min.y, i & 4 ? bb.max.z : bb.min.z).applyMatrix4(inv));
+      const tipY = lb.min.y, tipZ = (lb.min.z + lb.max.z) / 2, s = Math.sin(P.th), c = Math.cos(P.th);
+      for (const o of ps) {
+        if (o.held || o.fallen || o.inBowl) { held.delete(o); continue; }
+        const hgt = o.hgt || 20, h = held.get(o);
+        if (tipY >= hgt - 3 || tipZ <= R.half.z1) { held.delete(o); continue; }
+        if (!h) {
+          const dx = o.x - P.x, dz = o.z - P.z, f = dx * s + dz * c, lat = dx * c - dz * s;
+          // 걸린 물체는 로봇 앞면에 붙어 옴 (물체 크기가 팔 안쪽에 안 들어가도 앞면까지만)
+          const cr = o.shape === 'box' ? Math.max(o.w, o.d) / 2 : (o.r || 10), near = R.half.z1 + cr;
+          if (f > R.half.z1 - 8 && f < tipZ && lat > lb.min.x - 4 && lat < lb.max.x + 4) held.set(o, { f: Math.max(near, Math.min(f, tipZ - cr)), lat, th: (o.th || 0) - P.th });
+          continue;
+        }
+        o.x = P.x + h.lat * c + h.f * s; o.z = P.z - h.lat * s + h.f * c; o.th = P.th + h.th; o.vx = o.vz = 0;
+      }
+    } catch (e) { }
+  };
+  requestAnimationFrame(armTick);
+  if (U.api) for (const k of Object.keys(U.api)) { const fn = U.api[k]; if (typeof fn !== 'function') continue; U.api[k] = function (...a) { armStep(); return fn.apply(this, a); }; }
+
+  window.__rfGuide = { wrap, plan, program, pyLines, load, cumOps, robotOk, hasArm, held: () => held.size, get cur() { return CUR; } };
 })();
