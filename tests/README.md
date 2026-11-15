@@ -8,7 +8,7 @@
 pip install playwright websockets pillow numpy
 python -m playwright install chromium
 
-python tests/run.py            # 빠른 테스트 24개 (약 5분)
+python tests/run.py            # 빠른 테스트 25개 (약 5분)
 python tests/run.py --full     # + 시범→학습→주행 (약 6분)
 python tests/run.py -k camera  # 이름에 camera 가 들어간 것만
 ```
@@ -29,6 +29,7 @@ GitHub 에 올리면(push) **Actions** 탭에서 빠른 테스트가 저절로 �
 | camera-sharp-view | 화면용 카메라는 크게·부드럽게(슈퍼샘플링) 그리고, AI 가 받는 그림(96×72, 눈 24×18)은 하나도 바뀌지 않는지. 「🔍 선명한 화면」을 끄면 예전처럼 칸이 보이는지 |
 | real-robot-link | 🔗 실제 로봇 연결(가짜 허브): 시뮬레이터의 바퀴 명령이 `V:속도,회전` 으로 허브에 가는지, 속도 비율, 시뮬레이터를 멈추면 `V:0,0`, 끄면 보내지 않는지 |
 | real-robot-hub-program | 허브 쪽 파이썬을 가짜 pybricks 로 실제로 돌려: 명령대로 움직이고, ±400 mm/s·±360 °/s 로 자르고, 엉터리 줄은 무시하고, 0.3초 동안 명령이 없으면 멈추는지 |
+| ai-eye-while-running | 시뮬레이터 칸 「AI의 눈」이 실행 중에도 보이는지 (따라 하기 블록이 아닌 프로그램 · PC 도우미 두뇌여도 지금 카메라로 그림) |
 | teach-by-keyboard | 「🎮 운전해서 가르치기」: 키보드로 운전하면 로봇이 움직이고 장면(앞으로·멈춤)이 쌓이는지, 스페이스가 시뮬레이터를 멈추지 않는지 |
 | demo-check-warnings | 학습 창 ⚠️ 시범 점검 5가지 경고와 시뮬레이터 칸 경고 개수 |
 | train-language-and-inspect | 같은 그림이라도 지시가 다르면 다른 행동을 배우는지(L), 들여다보기 계산(주목한 곳·반사실·처음 듣는 낱말) |

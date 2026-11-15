@@ -284,6 +284,26 @@ async def t_real_hub(env):
         return f"DRIVE {sum(l.startswith('DRIVE') for l in lines)}번 → STOP"
 
 
+@test("ai-eye-while-running")
+async def t_eye_run(env):
+    """시뮬레이터 칸 「AI의 눈」이 실행 중에도 보이는지 — 따라 하기 블록이 아닌 프로그램(신경망 주행)이어도."""
+    pg = await env.page()
+    pix = """() => { const c = document.querySelector('.bcEye'); if (!c) return -1; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      const s = new Set(); for (let k = 0; k < d.length; k += 40) s.add(d[k] << 16 | d[k + 1] << 8 | d[k + 2]); return s.size; }"""
+    try:
+        await set_program(pg, "rm_nn_drive", None, {"in": [{"k": "color", "p": "C"}], "H": 6, "W": [0.1] * 26, "S": 300, "T": 180})
+        await pg.click("#simRun")
+        await pg.wait_for_timeout(2500)
+        running = await pg.evaluate("window.__cad.ext.simRunning")
+        n = await pg.evaluate(pix)
+        await pg.click("#simStop")
+        check(running, "프로그램이 실행되지 않음")
+        check(n > 3, f"실행 중 AI의 눈이 까맣게 멈춤 (색 {n}가지)")
+        return f"실행 중 색 {n}가지"
+    finally:
+        await env.close(pg)
+
+
 @test("teach-by-keyboard")
 async def t_teach(env):
     pg = await env.page()

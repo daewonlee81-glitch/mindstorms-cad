@@ -71,7 +71,7 @@
 
   // 한 번의 결정 정보 모으기
   const gather = now => {
-    const L = B.live, running = !!X.simRunning && L && L.img;
+    const L = B.live, running = !!X.simRunning && L && L.img && now - (L.t || 0) < 600; // 따라 하기 블록이 지금 쓰는 그림 (아니면 미리 계산)
     if (running) {
       if (B.ticks !== lastTick) { lastTick = B.ticks; tickAt = now; last = { running: true, teach: !!L.teach, key: L.teach ? L.a : -1, img: L.img, task: L.task, th: L.th, ins: BC.inspect(L.img, L.task, L.th) }; }
       return last;

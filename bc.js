@@ -246,7 +246,7 @@
     try {
       while (X.simRunning) {
         const img = eye(), a = keyAct(), p0 = U.pose();
-        B.live = { img, a, p: null, task, th: p0 ? p0.th : 0, teach: true }; B.ticks = (B.ticks || 0) + 1;
+        B.live = { img, a, p: null, task, th: p0 ? p0.th : 0, teach: true, t: performance.now() }; B.ticks = (B.ticks || 0) + 1;
         if (a >= 0 && img) { B.data.push({ task, a, img, cam: V.camMode(), th: p0 ? p0.th : 0, phys: physOn() }); B.runN++; }
         if (a !== last) { const v = ACT[a < 0 ? 0 : a]; await api.wbDrive(v[0], v[1]); last = a; }
         await api.wait(0.1);
@@ -264,7 +264,7 @@
     while (X.simRunning) {
       const img = eye(); if (!img) { await api.wait(0.1); continue; }
       const P0 = U.pose(), p = predict(img, task, P0 ? P0.th : 0); let a = 0; for (let k = 1; k < NA; k++) if (p[k] > p[a]) a = k;
-      B.live = { img, a, p, task, th: P0 ? P0.th : 0 }; B.ticks = (B.ticks || 0) + 1;
+      B.live = { img, a, p, task, th: P0 ? P0.th : 0, t: performance.now() }; B.ticks = (B.ticks || 0) + 1;
       if (a !== last) { await api.wbDrive(ACT[a][0], ACT[a][1]); last = a; }
       await api.wait(0.1);
     }
@@ -345,8 +345,9 @@ ${B.teaching ? `<div class="bcPad"><span></span><button data-k="u">▲</button><
         b.onpointerdown = on; b.onpointerup = off; b.onpointerleave = off; b.onpointercancel = off;
       });
     }
-    const L = B.live && (B.teaching || X.simRunning) ? B.live : null;
-    paintEye(wrap.querySelector('.bcEye'), L ? L.img : (X.simRunning ? null : eye()));
+    // 따라 하기 블록이 방금(0.5초 안) 본 그림이 있으면 그것, 없으면(다른 블록 프로그램 · PC 도우미 두뇌 · 멈춤) 지금 카메라로 직접 찍음
+    const L = B.live && (B.teaching || X.simRunning) && performance.now() - (B.live.t || 0) < 500 ? B.live : null;
+    paintEye(wrap.querySelector('.bcEye'), L ? L.img : eye());
     const bb = wrap.querySelector('.bcBars'); if (bb) bb.innerHTML = bars(L && L.p, L ? L.a : -1);
   };
   setInterval(() => draw(false), 150);
