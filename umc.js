@@ -570,18 +570,21 @@ const fits = p => p.every(q => q[0] >= 30 && q[0] <= 152 && q[1] >= 12 && q[1] <
           const m = new T3.Mesh(new T3.TorusGeometry(11.5, 3.5, 12, 32), new T3.MeshStandardMaterial({ color: 0xd22323, roughness: .4, metalness: .1 }));
           g.add(m); nut.mesh.add(g); nut.mesh.userData.ring = g;
         }
-        const HY = G.ring[3] + 0.8 + 2.4 - 8, base = nut.mesh.position.y; // 걸린 고리 중심 높이 (축 윗면에 고리 안쪽이 얹힘)
+        // 고리는 경기장 좌표로 직접 그림 (걸려 있는 동안 물체 자리 nut.x·z 는 받침 벽에 밀려 달라질 수 있음)
+        const HY = G.ring[3] + 0.8 + 2.4 - 8, mp = nut.mesh.position, X0 = wx(G.ring[0]), Z0 = wz(G.ring[1]); // HY: 걸린 고리 중심 높이 (축 윗면에 고리 안쪽이 얹힘)
+        const put = (x, y, z, rx) => { g.position.set(x - mp.x, y - mp.y, z - mp.z); g.rotation.set(rx, 0, 0); };
         if (nut.held && !nut.fall && R && R.started && !R.ended && touchesRect([wx(G.ringZ[0]), wz(G.ringZ[1]), wx(G.ringZ[2]), wz(G.ringZ[3])])) nut.fall = { t0: t };
         if (nut.fall) {
-          const u = t - nut.fall.t0, ts = 0.35, dzTip = G.ring[2] - 6 - G.ring[1], tf = Math.sqrt(2 * HY / 9810), dzLand = dzTip - 12;
-          if (u < ts) { const k = u / ts; g.position.set(0, HY - base, dzTip * k * k); g.rotation.set(0, 0, 0); }
-          else if (u < ts + tf) { const k = (u - ts) / tf; g.position.set(0, Math.max(3.5, HY - 0.5 * 9810 * (u - ts) * (u - ts)) - base, dzTip + (dzLand - dzTip) * k); g.rotation.set(Math.PI / 2 * k, 0, 0); }
+          const u = t - nut.fall.t0, ts = 0.35, zTip = wz(G.ring[2] - 6), tf = Math.sqrt(2 * HY / 9810), zLand = wz(G.ring[2] - 26);
+          if (u < ts) { const k = u / ts; put(X0, HY, Z0 + (zTip - Z0) * k * k, 0); }
+          else if (u < ts + tf) { const k = (u - ts) / tf; put(X0, Math.max(3.5, HY - 0.5 * 9810 * (u - ts) * (u - ts)), zTip + (zLand - zTip) * k, Math.PI / 2 * k); }
           else {
-            delete nut.fall; nut.held = 0; nut.off = 1; nut.z += dzLand; nut.y0 = nut.hgt / 2; nut.vx = nut.vz = 0;
+            delete nut.fall; nut.held = 0; nut.off = 1; nut.x = X0; nut.z = zLand; nut.y0 = nut.hgt / 2; nut.vx = nut.vz = 0;
+            mp.x = X0; mp.z = zLand; put(X0, 3.5, zLand, Math.PI / 2);
             const ph = U.phys && U.phys(); if (ph && ph.addProp && !nut.body) ph.addProp(nut);
           }
         }
-        if (!nut.fall) { if (nut.held) { g.position.set(0, HY - base, 0); g.rotation.set(0, 0, 0); } else { g.position.set(0, 3.5 - base, 0); g.rotation.set(Math.PI / 2, 0, 0); } }
+        if (!nut.fall) { if (nut.held) put(X0, HY, Z0, 0); else { g.position.set(0, 3.5 - mp.y, 0); g.rotation.set(Math.PI / 2, 0, 0); } }
       }
       // 간단 모드: 그릇에 밀어 붙인 사료는 그릇 안으로 (바닥 9mm 위, 입구 원 안)
       if (!(U.phys && U.phys())) {
