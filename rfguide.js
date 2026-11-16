@@ -90,7 +90,7 @@
     }
     step('nut');
     toY(120, ['뒤로: 로봇 중심 y = 12cm (몸 남쪽 끝 22cm, 펫토이 받침 23cm)', 'back: robot centre y = 12 cm (body ends at 22 cm, the toy base starts at 23 cm)']);
-    face(0); toX(1725 - FR, ['동쪽으로: 너트를 밀어 고리에서 빼기', 'east: push the nut off the peg']);
+    face(0); toX(1725 - FR, ['동쪽으로: 고리 아래 자리에 들어감 → 고리가 떨어짐', 'east: enter the zone under the ring → the ring falls']);
 
     step('white');
     if (l.cats) { // 흰 고양이 = b(137cm), 주황 = a(127cm)
@@ -247,9 +247,9 @@ color_${p.sr} = ColorSensor(Port.${p.sr})  # ${L('오른쪽 컬러 센서', 'rig
         dim(ri(2)[1]),
         rb(L(`화장실에서 뒤로 나와 그릇 정북쪽(x=133.2cm)에서 북쪽을 본 채 <b>뒤로</b> 그릇에 붙습니다(로봇 뒤 끝이 그릇 벽 0.4cm 앞). 받침판 모터 <b>${dump}</b>를 30도 돌리면 받침판 뒤쪽이 내려가 사료 10개가 뒤로 미끄러져 그릇 안으로 떨어집니다 (10점). 2초 뒤 받침판을 0도로 되돌립니다.`, `Back out from the litter box, line up due north of the bowl (x = 133.2 cm) facing north and <b>reverse</b> up to the bowl (rear 0.4 cm from it). Turn the tray motor <b>${dump}</b> to 30°: the back of the tray drops and the 10 food pieces slide off into the bowl (10). After 2 s return the tray to 0°.`)),
         dim(L('시뮬레이터(간단 모드)는 받침판이 15도 넘게 기울면 실린 사료를 낮은 끝에서 2.5cm 바깥 바닥으로 떨어뜨리고, 그 자리가 그릇이면 그릇 안으로 셉니다.', 'The simulator (simple mode) drops the carried food 2.5 cm beyond the low end once the tray tilts over 15°; if that spot is the bowl it counts as in the bowl.'))), [[1232, 60, 1432, 430]], 'bowl');
-      add(L('#4 너트 빼기', '#4 Nut'), P(
+      add(L('#4 고리 떨어뜨리기', '#4 Ring off'), P(
         dim(ri(5)[1]),
-        rb(L('로봇 중심 y=12cm 로 동쪽으로 가면 몸 남쪽 끝(22cm)이 너트(19.7~22.7cm)에는 걸리고 펫토이 받침(23cm~)은 비켜 갑니다. 앞 끝 172.5cm 까지 밀면 너트가 6cm 넘게 움직입니다 (10점).', 'With the robot centre at y = 12 cm going east, the body\'s south side (22 cm) catches the nut (19.7–22.7 cm) and misses the toy base (from 23 cm). Push until the front is at 172.5 cm: the nut moves over 6 cm (10).'))), [[1600, 160, 1760, 360]], 'nut');
+        rb(L('로봇 중심 y=12cm 로 동쪽으로 가면 몸 남쪽 끝(22cm)이 고리 아래 점선 자리(19~22.6cm)에 들어가고 펫토이 받침(23cm~)은 비켜 갑니다. 자리에 들어가면 고리가 7축에서 빠져 떨어집니다 (10점). 시뮬레이터는 떨어지는 모습만 보여 줍니다 — 실제 로봇은 팔 등으로 고리를 축 끝 쪽으로 밀어 빼야 합니다.', 'With the robot centre at y = 12 cm going east, the body\'s south side (22 cm) enters the dotted zone under the ring (19–22.6 cm) and misses the toy base (from 23 cm). The ring then slides off the axle and falls (10). The simulator only shows the fall; a real robot must push the ring off the end of the axle, e.g. with an arm.'))), [[1600, 160, 1760, 360]], 'nut');
       add(L('#5 흰 고양이 → 동물병원', '#5 White cat → Vet'), P(
         dim(ri(6)[1]),
         rb(L('고양이 바로 북쪽에 그릇(지름 15cm 벽)이 있어 로봇이 고양이 위에서 남쪽을 볼 수 없습니다. 그래서 먼저 y=60cm 줄에서 두 고양이를 옆으로 밀어(앞 고양이가 뒤 고양이를 밂) 흰 고양이를 그릇 옆(병원 안)으로 옮긴 다음, 그릇을 돌아 북쪽에서 남쪽으로 밀어 떨어뜨립니다 (10점).', 'The bowl (15 cm wall) sits right north of the cats, so the robot cannot stand above a cat facing south. First push the two cats sideways along y = 60 cm (one pushes the other) so the white cat sits beside the bowl but still over the vet, then go round the bowl and push it south over the edge (10).')),
