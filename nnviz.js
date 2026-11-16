@@ -40,8 +40,9 @@
   };
 
   // 실제 주행 중 입력 엿보기: window.__nnF 를 감싸 마지막 호출을 기억 (학습 중 16개 경기장 호출은 무시)
-  const orig = window.__nnF; let live = null;
-  window.__nnF = (net, x) => { const r = orig(net, x); try { if (!(U.sim && U.sim() && U.sim().training)) live = { W: net.W, x: x.slice(), at: performance.now() }; } catch (e) { } return r; };
+  const orig = window.__nnF; let live = null, frameNo = 0;
+  (function tick() { frameNo++; requestAnimationFrame(tick); })(); // 화면 번호 — 느린 컴퓨터(1초에 2장 미만)에서도 '방금 호출됨'을 알아보도록
+  window.__nnF = (net, x) => { const r = orig(net, x); try { if (!(U.sim && U.sim() && U.sim().training)) live = { W: net.W, x: x.slice(), at: performance.now(), f: frameNo }; } catch (e) { } return r; };
 
   const TM = () => window.__trainModel;
   const label = x => { try { return TM().inLabel([x]); } catch (e) { return x.k + ' ' + x.p; } };
@@ -92,7 +93,7 @@
   // 입력 값: 달리는 중이면 실제 센서, 아니면 막대
   const inputs = net => {
     const same = live && live.W.length === net.W.length && live.W.every((v, i) => v === +net.W[i]);
-    const fresh = same && performance.now() - live.at < 500 && X.simRunning;
+    const fresh = same && X.simRunning && (performance.now() - live.at < 500 || frameNo - live.f <= 2); // 0.5초 안 또는 최근 2화면 안에 호출됨
     if (fresh) return { x: live.x, live: true };
     return { x: net.ins.map((q, i) => { const v = sliders[i] ?? (q.k === 'color' ? 50 : 300); return q.k === 'color' ? v / 100 : Math.min(v, 1000) / 1000; }), live: false };
   };
