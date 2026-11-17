@@ -80,7 +80,7 @@ for (tx, ty, idx, name) in [(mx - ts - 2*mm, my + mh + 2*mm, 10, '10 왼쪽 위'
     c.setFillGray(0); c.setFont(F, 8)
     c.drawCentredString(tx + ts/2, ty + (ts + 1.5*mm if ty > my else -4*mm), name)
 c.setFont(F, 8); c.setFillGray(0.3)
-c.drawCentredString(W/2, my - 22*mm, '웹캠은 매트 가운데 위 1.0~1.1m. 매트와 태그 4장이 한 화면에 모두 들어오게.')
+c.drawCentredString(W/2, my - 22*mm, '웹캠(앵커 PowerConf C200, 화각 78°)은 매트 가운데 위 약 1.0m. 매트와 태그 4장이 한 화면에 모두 들어오게.')
 c.drawCentredString(W/2, my - 27*mm, '매트·태그를 옮기면 프로그램의 보정을 다시 하세요.')
 checkline(30*mm); footer(1); c.showPage()
 
