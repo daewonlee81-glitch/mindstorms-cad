@@ -61,6 +61,7 @@ index.html
 | vlaviz.js | 🔍 AI 속 들여다보기 | `__vlaviz` | `__bc` `__vla` |
 | nnviz.js | 🔍 신경망 들여다보기 (가중치) | `__nnviz` (`__nnF` 감쌈) | `__trainModel` `__nnF` |
 | real.js | real2sim 1단계: 🔗 실제 로봇도 같이 움직이기 — 바퀴 명령을 Pybricks stdin `V:속도,회전` 으로 전달, 허브 쪽 받기 프로그램(0.3초 안전 정지) | `__real` (`__vla.drive` `__bc.drive/teach` 감쌈) | `__pyb.PB` `__vla` `__bc` |
+| overcam.js | real2sim P5: 📷 천장 웹캠 보정 마법사 — 에이프릴태그 36h11 검출(vendor/apriltag WASM 워커), 번호 원 클릭으로 매트 호모그래피, 모서리 태그 꼭짓점 저장 후 매 프레임 재맞춤, 카메라 위치 분해, 로봇 태그 높이 시차 보정, 정확도 기록 | `__overcam` | (화면: #realWrap 아래 버튼) |
 
 PC 쪽 프로그램: `vla-helper/` (VLA 도우미 서버, `vla-helper.zip` 으로 내려받음).
 

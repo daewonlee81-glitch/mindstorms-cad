@@ -8,7 +8,7 @@
 pip install playwright websockets pillow numpy
 python -m playwright install chromium
 
-python tests/run.py            # 빠른 테스트 25개 (약 5분)
+python tests/run.py            # 빠른 테스트 26개 (약 5분)
 python tests/run.py --full     # + 시범→학습→주행 (약 6분)
 python tests/run.py -k camera  # 이름에 camera 가 들어간 것만
 ```
@@ -28,6 +28,7 @@ GitHub 에 올리면(push) **Actions** 탭에서 빠른 테스트가 저절로 �
 | ai-camera-views | AI 카메라 1인칭·3인칭·위에서 그림 — 3인칭·위에서는 로봇(보라·노랑 앞)이 보이고 1인칭은 안 보이는지 |
 | camera-sharp-view | 화면용 카메라는 크게·부드럽게(슈퍼샘플링) 그리고, AI 가 받는 그림(96×72, 눈 24×18)은 하나도 바뀌지 않는지. 「🔍 선명한 화면」을 끄면 예전처럼 칸이 보이는지 |
 | real-robot-link | 🔗 실제 로봇 연결(가짜 허브): 시뮬레이터의 바퀴 명령이 `V:속도,회전` 으로 허브에 가는지, 속도 비율, 시뮬레이터를 멈추면 `V:0,0`, 끄면 보내지 않는지 |
+| overcam-calibration | 📷 천장 웹캠 보정 마법사: 정답을 아는 합성 사진(tests/fixtures/overcam_synth.png — 비스듬한 카메라, 로봇 태그 높이 100mm)으로 태그 5장 검출 → 번호 원 9곳 마우스 클릭 → 매트 맞춤 → 로봇 위치 오차 6mm 안·방향 1.5° 안, 높이 보정 전에는 크게 틀림을 확인 |
 | real-robot-hub-program | 허브 쪽 파이썬을 가짜 pybricks 로 실제로 돌려: 명령대로 움직이고, ±400 mm/s·±360 °/s 로 자르고, 엉터리 줄은 무시하고, 0.3초 동안 명령이 없으면 멈추는지 |
 | ai-eye-while-running | 시뮬레이터 칸 「AI의 눈」이 실행 중에도 보이는지 (따라 하기 블록이 아닌 프로그램 · PC 도우미 두뇌여도 지금 카메라로 그림) |
 | teach-by-keyboard | 「🎮 운전해서 가르치기」: 키보드로 운전하면 로봇이 움직이고 장면(앞으로·멈춤)이 쌓이는지, 스페이스가 시뮬레이터를 멈추지 않는지 |

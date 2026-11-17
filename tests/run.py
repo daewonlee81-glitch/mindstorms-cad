@@ -232,6 +232,43 @@ async def t_real(env):
         await env.close(pg)
 
 
+@test("overcam-calibration")
+async def t_overcam(env):
+    """📷 천장 웹캠 보정 마법사: 정답을 아는 합성 사진(비스듬한 카메라, 로봇 태그 높이 100mm)으로
+    태그 검출 → 번호 원 9곳 클릭 → 매트 맞춤 → 카메라 위치 → 로봇 위치·방향(높이 보정)을 확인."""
+    truth = json.loads((ROOT / "tests/fixtures/overcam_synth.json").read_text())
+    pg = await env.page()
+    try:
+        await pg.evaluate("localStorage.removeItem('mscad.overcam.cal')")
+        await pg.evaluate("() => { window.__overcam.open(); window.__overcam.startPhoto('tests/fixtures/overcam_synth.png'); }")
+        await pg.wait_for_function("window.__overcam.state.dets.length >= 5", timeout=30000)
+        ids = await pg.evaluate("window.__overcam.state.dets.map(d => d.id).sort((a, b) => a - b)")
+        check(ids == [0, 10, 11, 12, 13], f"태그 검출: {ids}")
+        await pg.click("#ocWin [data-st='2']")
+        box = await pg.evaluate("(() => { const r = document.querySelector('#ocWin canvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; })()")
+        W, H = truth["size"]
+        for k in (1, 3, 10, 12, 2, 8, 9, 11, 4):
+            u, v = truth["clicks"][str(k)]
+            await pg.mouse.click(box[0] + u / W * box[2], box[1] + v / H * box[3])
+        await pg.wait_for_function("Object.keys(window.__overcam.cal.tagCorners).length === 4", timeout=10000)
+        await pg.evaluate("() => { window.__overcam.cal.tagH = 100; window.__overcam.update(); }")
+        await pg.wait_for_function("window.__overcam.state.robots.length === 1 && window.__overcam.state.via === 'tags'", timeout=10000)
+        r = await pg.evaluate("(() => { const S = window.__overcam.state; return { rob: S.robots[0], cam: S.cam, res: S.clickRes }; })()")
+        rob, cam, R = r["rob"], r["cam"], truth["robot"]
+        err = ((rob["x"] - R["x"]) ** 2 + (rob["y"] - R["y"]) ** 2) ** 0.5
+        derr = abs((rob["deg"] - R["deg"] + 180) % 360 - 180)
+        raw = ((rob["raw"][0] - R["x"]) ** 2 + (rob["raw"][1] - R["y"]) ** 2) ** 0.5
+        check(err < 6, f"로봇 위치 오차 {err:.1f} mm (보정 {rob['x']:.1f},{rob['y']:.1f} / 정답 {R['x']},{R['y']})")
+        check(derr < 1.5, f"로봇 방향 오차 {derr:.2f}° ({rob['deg']:.2f})")
+        check(raw > 30, f"높이 보정 전 오차가 커야 함 ({raw:.1f} mm) — 시험 사진이 비스듬하지 않음?")
+        check(abs(cam["z"] - truth["cam"][2]) < 40, f"카메라 높이 {cam['z']:.0f} (정답 {truth['cam'][2]})")
+        check(abs(rob["hEst"] - 100) < 15, f"크기로 추정한 태그 높이 {rob['hEst']:.0f} mm (정답 100)")
+        check(max(e for _, e in R and r["res"]) < 3, f"원 맞춤 오차 {r['res']}")
+        return f"로봇 오차 {err:.1f} mm · 방향 {derr:.2f}° · 보정 전 {raw:.0f} mm · 카메라 높이 {cam['z']:.0f} mm · 기울기 {cam['tilt']:.1f}°"
+    finally:
+        await env.close(pg)
+
+
 @test("real-robot-hub-program")
 async def t_real_hub(env):
     """허브 쪽 파이썬(가짜 pybricks)을 실제로 돌려: 명령대로 움직이고, 0.3초 동안 명령이 없으면 멈추는지."""
@@ -728,7 +765,7 @@ CONTRACT = {
     "window.__pyb.PB": "tx q running maxWrite",
 }
 ADDON_GLOBALS = ("__cadx __cadxReady __classes __axes __backup __simRigs __simRigObjs __husky __mech __trx __othelloAI __simCode "
-                 "__line2 __trs __nnF __trainModel __rfGuide __umcGuide __wbSync __wbTb __vla __bc __vlaviz __nnviz __real").split()
+                 "__line2 __trs __nnF __trainModel __rfGuide __umcGuide __wbSync __wbTb __vla __bc __vlaviz __nnviz __real __overcam").split()
 
 
 # index.html 의 <script> 순서: 왼쪽 파일은 오른쪽 파일들보다 뒤에 불러와야 함 (불러올 때 그 전역을 바로 씀)
@@ -738,6 +775,7 @@ LOAD_AFTER = {
     "simsave.js": ["app.js"], "line2.js": ["app.js"], "trainmodel.js": ["app.js"],
     "vla.js": ["app.js", "wordblock-sync.js", "huskylens.js"], "bc.js": ["vla.js"], "vlaviz.js": ["bc.js", "vla.js"], "nnviz.js": ["trainmodel.js", "bc.js"],
     "real.js": ["vla.js", "bc.js"],
+    "overcam.js": ["real.js"],
 }
 
 
