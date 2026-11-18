@@ -165,7 +165,7 @@
       const cx = (pt[0][0] + pt[1][0] + pt[2][0] + pt[3][0]) / 4, cy = (pt[0][1] + pt[1][1] + pt[2][1] + pt[3][1]) / 4;
       const x = cx - cal.tagOff * dx / L, y = cy - cal.tagOff * dy / L;
       const pfc = apply(S.Hm, [d.center.x, d.center.y]);
-      S.robots.push({ id: d.id, x, y, deg: Math.atan2(dy, dx) * 180 / Math.PI, hEst, side, raw: pfc, sim: { x: x - MAT.w / 2, z: y - MAT.h / 2, th: Math.atan2(dx / L, dy / L) }, corners: pt });
+      S.robots.push({ id: d.id, x, y, tx: cx, ty: cy, ux: dx / L, uy: dy / L, deg: Math.atan2(dy, dx) * 180 / Math.PI, hEst, side, raw: pfc, sim: { x: x - MAT.w / 2, z: y - MAT.h / 2, th: Math.atan2(dx / L, dy / L) }, corners: pt });
     }
     const now = performance.now(); if (now - S.last > 1000) { S.fps = S.frames / ((now - (S.t0 || now)) / 1000 || 1); S.t0 = now; S.frames = 0; S.last = now; }
     renderInfo();
@@ -290,10 +290,12 @@
 <div class="note">계산이 끝나면 지금 보이는 모서리 태그 위치를 저장합니다. 그다음부터는 원을 다시 클릭하지 않아도 태그만 보고 맞춥니다 (카메라나 매트를 옮겨도 태그가 매트와 같이 있으면 그대로).</div>`;
       if (st === 3) body = `<div class="row">태그 높이(바닥→태그 면) <input type="number" id="ocH" value="${cal.tagH}" step="1"> mm</div>
 <div class="row">태그 가운데 → 로봇 회전 중심 <input type="number" id="ocOff" value="${cal.tagOff}" step="1"> mm 앞</div>
-<div class="row">카메라 가로 화각 <input type="number" id="ocFov" value="${cal.hfov}" step="0.5">° <span class="note">(앵커 C200: 78° 설정이면 약 70°, 95°면 약 87°, 65°면 약 58°)</span></div>
+<div class="row">카메라 가로 화각 <input type="number" id="ocFov" value="${cal.hfov}" step="0.5">°</div>
+<div class="note">앵커 C200: 화각 설정 78°면 가로 약 70°, 95°면 약 87°, 65°면 약 58° — AnkerWork 의 설정에 맞는 값을 넣으세요. 「크기로 추정한 태그 높이」는 태그 모서리 1px 차이에도 ±10~15mm 흔들리는 참고값입니다. 화각을 이 값에 맞추려고 바꾸지 마세요.</div>
 <div class="note">카메라가 비스듬하면 높이 있는 태그는 실제보다 카메라 반대쪽으로 밀려 보입니다. 태그 높이만큼 이 차이를 보정합니다. 「크기로 추정한 높이」가 입력값과 비슷하면 보정이 맞는 것입니다.</div>`;
       if (st === 4) body = `<div class="note">로봇(태그 가운데가 로봇 중심과 같게, 또는 앞 거리 입력)을 번호 원 위에 올려놓고 「기록」. 여러 원에서 반복하세요. 목표: 10mm 안.</div>
-<div class="row"><button id="ocRec">${t('기록')}</button><button id="ocClr">${t('기록 지우기')}</button></div><div id="ocSamp"></div>`;
+<div class="row"><button id="ocRec">${t('기록')}</button><button id="ocClr">${t('기록 지우기')}</button></div><div id="ocSamp"></div>
+<div class="row"><button id="ocOffCalc">앞 거리 계산</button><span class="note">같은 원에서 로봇을 90°씩 돌려 3번 이상 기록한 뒤 누르면, 태그가 회전 중심에서 얼마나 앞에 있는지 계산해 넣습니다.</span></div>`;
       info.innerHTML = `<div class="tabs">${tab(1, '카메라')}${tab(2, '매트 맞추기')}${tab(3, '로봇 태그')}${tab(4, '정확도 확인')}</div>${S.err ? `<div class="bad">${S.err}</div>` : ''}${body}<div id="ocLive"></div>`;
       info.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { S.step = +b.dataset.st; renderSide(true); });
       const $ = s => info.querySelector(s);
@@ -315,8 +317,9 @@
         $('#ocFov').oninput = e => { cal.hfov = +e.target.value || 70; saveCal(); update(); };
       }
       if ($('#ocRec')) {
-        $('#ocRec').onclick = () => { const r = S.robots[0]; if (!r) return; const near = nearest(r); cal.samples.push({ c: near.k, dx: r.x - CIRC[near.k][0], dy: r.y - CIRC[near.k][1], deg: r.deg }); saveCal(); renderSide(true); };
+        $('#ocRec').onclick = () => { const r = S.robots[0]; if (!r) return; const near = nearest(r); cal.samples.push({ c: near.k, dx: r.x - CIRC[near.k][0], dy: r.y - CIRC[near.k][1], deg: r.deg, tx: r.tx, ty: r.ty, ux: r.ux, uy: r.uy }); saveCal(); renderSide(true); };
         $('#ocClr').onclick = () => { cal.samples = []; saveCal(); renderSide(true); };
+        $('#ocOffCalc').onclick = () => { const r = fitOffset(); if (r == null) alert('같은 원에서 방향을 바꿔 3번 이상 기록해 주세요.'); else { cal.tagOff = Math.round(r); saveCal(); update(); alert(`앞 거리 = ${cal.tagOff} mm 로 넣었습니다. 기록을 지우고 다시 확인해 보세요.`); } };
       }
     }
     // 바뀌는 값
@@ -325,7 +328,7 @@
     if ($('#ocRes')) $('#ocRes').innerHTML = S.clickRes && S.clickRes.length ? `<table><tr><th>원</th><th>맞춤 오차</th></tr>${S.clickRes.map(([k, e]) => `<tr><td>${k}</td><td class="${e < 10 ? 'ok' : 'bad'}">${f1(e)} mm</td></tr>`).join('')}</table>` +
       (S.clickRes.length === 4 ? '<div class="note">원 4곳은 오차가 항상 0으로 나옵니다. 5곳 이상 클릭하면 실제 오차를 볼 수 있습니다.</div>' : '') + `<div>저장한 모서리 태그: ${Object.keys(cal.tagCorners).join(', ') || '없음'}</div>` : '';
     if ($('#ocSamp')) {
-      const s = cal.samples; $('#ocSamp').innerHTML = s.length ? `<table><tr><th>원</th><th>오차</th><th>방향</th></tr>${s.map(o => `<tr><td>${o.c}</td><td class="${Math.hypot(o.dx, o.dy) < 10 ? 'ok' : 'bad'}">${f1(Math.hypot(o.dx, o.dy))} mm</td><td>${f1(o.deg)}°</td></tr>`).join('')}</table><div class="big">평균 ${f1(s.reduce((a, o) => a + Math.hypot(o.dx, o.dy), 0) / s.length)} mm</div>` : '';
+      const s = cal.samples; $('#ocSamp').innerHTML = s.length ? `<table><tr><th>원</th><th>오차</th><th>x / y</th><th>방향</th></tr>${s.map(o => `<tr><td>${o.c}</td><td class="${Math.hypot(o.dx, o.dy) < 10 ? 'ok' : 'bad'}">${f1(Math.hypot(o.dx, o.dy))} mm</td><td>${o.dx > 0 ? '+' : ''}${f0(o.dx)} / ${o.dy > 0 ? '+' : ''}${f0(o.dy)}</td><td>${f1(o.deg)}°</td></tr>`).join('')}</table><div class="big">평균 ${f1(s.reduce((a, o) => a + Math.hypot(o.dx, o.dy), 0) / s.length)} mm</div>` : '';
     }
     const mats = S.dets.filter(d => !ROBOT_IDS(d.id)).map(d => d.id).sort((a, b) => a - b);
     const camTxt = S.cam ? `카메라: 높이 ${f0(S.cam.z)} mm · 기울기 ${f1(S.cam.tilt)}° · 위치 (${f0(S.cam.x)}, ${f0(S.cam.y)}) · 가로 화각 ${f1(S.cam.hfov)}°` : '카메라: 매트를 맞추면 계산됩니다';
@@ -334,6 +337,18 @@
     $('#ocLive').innerHTML = `<hr>${frozen ? '<div class="bad">⚠️ 영상이 멈췄습니다 — 창이 가려졌거나 카메라가 끊겼습니다. 이 창을 앞으로 가져오거나 「카메라 켜기」를 다시 누르세요.</div>' : ''}${S.drawErr ? `<div class="bad">오류: ${S.drawErr}</div>` : ''}<div>${S.W ? `${S.W}×${S.H_img()}` : '영상 없음'} · 검출 ${f0(S.ms)} ms · ${S.photo ? '사진' : f1(S.fps) + ' fps'}</div><div>매트 태그: ${mats.join(', ') || '없음'} · 맞춤: ${S.via === 'tags' ? '태그' : S.via === 'clicks' ? '클릭' : '—'}</div><div>${camTxt}</div>${rob || (S.Hm ? '<div>로봇 태그(ID 0~7)가 보이지 않습니다</div>' : '')}`;
     const hint = win.querySelector('#ocHint');
     hint.textContent = st === 2 ? '번호 원 가운데를 클릭하세요 (파란 점). 분홍 선 = 계산한 매트 그림 — 실제 매트 선과 겹치면 맞은 것입니다.' : '초록 = 저장된 모서리 태그 · 노랑 = 아직 저장 안 된 태그 · 주황 = 로봇 태그 · 빨간 화살표 = 보정한 로봇 위치와 방향';
+  };
+  // 앞 거리: 같은 원 기록들에서 로봇 중심 = 태그 − off·앞방향 이 가장 덜 흩어지는 off (최소제곱)
+  const fitOffset = () => {
+    const by = {}; cal.samples.filter(o => o.tx != null).forEach(o => (by[o.c] = by[o.c] || []).push(o));
+    let num = 0, den = 0, n = 0;
+    for (const g of Object.values(by)) {
+      if (g.length < 2) continue;
+      const mt = [g.reduce((a, o) => a + o.tx, 0) / g.length, g.reduce((a, o) => a + o.ty, 0) / g.length];
+      const mu = [g.reduce((a, o) => a + o.ux, 0) / g.length, g.reduce((a, o) => a + o.uy, 0) / g.length];
+      for (const o of g) { const du = [o.ux - mu[0], o.uy - mu[1]]; num += (o.tx - mt[0]) * du[0] + (o.ty - mt[1]) * du[1]; den += du[0] ** 2 + du[1] ** 2; n++; }
+    }
+    return n >= 3 && den > 0.5 ? num / den : null;
   };
   const nearest = r => { let best = { k: 0, d: 1e9 }; for (const [k, [x, y]] of Object.entries(CIRC)) { const d = Math.hypot(r.x - x, r.y - y); if (d < best.d) best = { k: +k, d }; } return best; };
 
@@ -348,5 +363,5 @@
   };
   setInterval(ui, 500);
 
-  window.__overcam = { open, close, startCamera, startPhoto, cal, state: S, homography, apply, cameraPose, unproject, learnTags, CIRC, MAT, update };
+  window.__overcam = { open, close, startCamera, startPhoto, cal, state: S, homography, apply, cameraPose, unproject, learnTags, CIRC, MAT, update, fitOffset };
 })();

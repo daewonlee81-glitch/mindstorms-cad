@@ -264,7 +264,10 @@ async def t_overcam(env):
         check(abs(cam["z"] - truth["cam"][2]) < 40, f"카메라 높이 {cam['z']:.0f} (정답 {truth['cam'][2]})")
         check(abs(rob["hEst"] - 100) < 15, f"크기로 추정한 태그 높이 {rob['hEst']:.0f} mm (정답 100)")
         check(max(e for _, e in R and r["res"]) < 3, f"원 맞춤 오차 {r['res']}")
-        return f"로봇 오차 {err:.1f} mm · 방향 {derr:.2f}° · 보정 전 {raw:.0f} mm · 카메라 높이 {cam['z']:.0f} mm · 기울기 {cam['tilt']:.1f}°"
+        off = await pg.evaluate("""(() => { const O = window.__overcam, keep = O.cal.samples; O.cal.samples = [0, 90, 180, 270].map(a => { const r = a * Math.PI / 180, u = [Math.cos(r), Math.sin(r)];
+            return { c: 2, tx: 397 + 25 * u[0], ty: 305 + 25 * u[1], ux: u[0], uy: u[1], dx: 0, dy: 0, deg: a }; }); const v = O.fitOffset(); O.cal.samples = keep; return v; })()""")
+        check(off is not None and abs(off - 25) < 0.5, f"앞 거리 계산 {off} (정답 25)")
+        return f"로봇 오차 {err:.1f} mm · 방향 {derr:.2f}° · 보정 전 {raw:.0f} mm · 앞 거리 계산 {off:.1f} mm · 카메라 높이 {cam['z']:.0f} mm · 기울기 {cam['tilt']:.1f}°"
     finally:
         await env.close(pg)
 
