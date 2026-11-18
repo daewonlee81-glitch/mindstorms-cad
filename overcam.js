@@ -333,7 +333,8 @@
   const ui = () => {
     const sim = document.getElementById('sim'); if (sim && sim.hidden) return;
     const after = document.getElementById('realWrap') || document.getElementById('vlaWrap'); if (!after) return;
-    if (!box || !document.body.contains(box)) { box = document.createElement('div'); box.id = 'ocWrap'; box.innerHTML = `<button id="ocOpen">${t('📷 천장 웹캠 보정')}</button>`; box.querySelector('#ocOpen').onclick = open; }
+    if (!box || !document.body.contains(box)) { box = document.createElement('div'); box.id = 'ocWrap'; box.innerHTML = `<button id="ocOpen"></button>`; box.querySelector('#ocOpen').onclick = open; }
+    const lb = t('📷 천장 웹캠 보정'), bt = box.querySelector('#ocOpen'); if (bt.textContent !== lb) bt.textContent = lb; // 언어가 나중에 정해져도 따라감
     if (box.previousElementSibling !== after) after.after(box);
   };
   setInterval(ui, 500);
