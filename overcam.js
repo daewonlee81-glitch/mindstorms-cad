@@ -111,7 +111,7 @@
     S.worker = new Worker(workerUrl());
     S.worker.onmessage = e => {
       if (e.data.ready) { S.ready = true; return; }
-      S.busy = false; S.dets = e.data.dets || []; S.ms = e.data.ms; S.frames++; update();
+      S.busy = false; S.dets = e.data.dets || []; S.ms = e.data.ms; S.frames++; S.lastFrame = performance.now(); try { update(); } catch (er) { S.drawErr = String(er && er.message || er); }
     };
     S.worker.onerror = e => { S.err = '검출기 오류: ' + (e.message || e); S.busy = false; };
   };
@@ -126,15 +126,23 @@
     for (let i = 0, j = 0; j < gray.length; i += 4, j++) gray[j] = (d[i] * 77 + d[i + 1] * 150 + d[i + 2] * 29) >> 8;
     return { gray, W, H };
   };
-  const tick = now => {
+  // 고리: requestAnimationFrame 대신 setInterval (Mac Chrome 은 창이 가려지면 rAF 를 멈춤 → 화면이 얼어 보였음)
+  let loopId = 0;
+  const tick = () => {
     if (!win || win.hidden || !(S.video || S.photo)) return;
-    requestAnimationFrame(tick);
-    if (S.ready && !S.busy && (!S.photo || S.frames < 2)) {
-      const f = grab(); if (!f) return;
-      S.busy = true; S.worker.postMessage({ gray: f.gray, w: f.W, h: f.H, dec: cal.dec }, [f.gray.buffer]);
-    }
-    draw();
+    try {
+      // 워커가 2초 넘게 답이 없으면 다시 보냄 (멈춤 방지)
+      if (S.busy && performance.now() - S.sent > 2000) S.busy = false;
+      if (S.ready && !S.busy && (!S.photo || S.frames < 2)) {
+        const f = grab();
+        if (f) { S.busy = true; S.sent = performance.now(); S.worker.postMessage({ gray: f.gray, w: f.W, h: f.H, dec: cal.dec }, [f.gray.buffer]); }
+      }
+      draw();
+      S.drawErr = '';
+    } catch (e) { S.drawErr = String(e && e.message || e); }
   };
+  const startLoop = () => { if (!loopId) { loopId = setInterval(tick, 33); setInterval(() => renderInfo(), 1000); } };
+  const requestAnimationFrame = () => startLoop();
 
   // ───────── 프레임마다 계산 ─────────
   const update = () => {
@@ -205,7 +213,7 @@
         const k = CLICK_ORDER.find(k => !cal.clicks[k]); if (!k) return;
         cal.clicks[k] = [x, y]; saveCal();
         if (Object.keys(cal.clicks).length >= 4) learnTags(); else update();
-        renderSide(true);
+        renderSide(true); tick();
       };
     }
     win.hidden = false; renderSide(true); requestAnimationFrame(tick);
@@ -320,9 +328,10 @@
       const s = cal.samples; $('#ocSamp').innerHTML = s.length ? `<table><tr><th>원</th><th>오차</th><th>방향</th></tr>${s.map(o => `<tr><td>${o.c}</td><td class="${Math.hypot(o.dx, o.dy) < 10 ? 'ok' : 'bad'}">${f1(Math.hypot(o.dx, o.dy))} mm</td><td>${f1(o.deg)}°</td></tr>`).join('')}</table><div class="big">평균 ${f1(s.reduce((a, o) => a + Math.hypot(o.dx, o.dy), 0) / s.length)} mm</div>` : '';
     }
     const mats = S.dets.filter(d => !ROBOT_IDS(d.id)).map(d => d.id).sort((a, b) => a - b);
-    const camTxt = S.cam ? `카메라: 높이 ${f0(S.cam.z)} mm · 기울기 ${f1(S.cam.tilt)}° · 위치 (${f0(S.cam.x)}, ${f0(S.cam.y)}) · 가로 화각 ${f1(S.cam.hfov)}° (사진에서 추정 ${isFinite(S.cam.hfovEst) ? f1(S.cam.hfovEst) + '°' : '—'})` : '카메라: 매트를 맞추면 계산됩니다';
+    const camTxt = S.cam ? `카메라: 높이 ${f0(S.cam.z)} mm · 기울기 ${f1(S.cam.tilt)}° · 위치 (${f0(S.cam.x)}, ${f0(S.cam.y)}) · 가로 화각 ${f1(S.cam.hfov)}°` : '카메라: 매트를 맞추면 계산됩니다';
     const rob = S.robots.map(r => { const n = nearest(r); return `<div class="big">🤖 ${r.id}: (${f0(r.x)}, ${f0(r.y)}) mm · ${f1(r.deg)}°</div><div>가까운 원 ${n.k}까지 ${f1(n.d)} mm · 크기로 추정한 태그 높이 ${f0(r.hEst)} mm (입력 ${cal.tagH}) · 보정 전 (${f0(r.raw[0])}, ${f0(r.raw[1])})</div>`; }).join('');
-    $('#ocLive').innerHTML = `<hr><div>${S.W ? `${S.W}×${S.H_img()}` : '영상 없음'} · 검출 ${f0(S.ms)} ms · ${S.photo ? '사진' : f1(S.fps) + ' fps'}</div><div>매트 태그: ${mats.join(', ') || '없음'} · 맞춤: ${S.via === 'tags' ? '태그' : S.via === 'clicks' ? '클릭' : '—'}</div><div>${camTxt}</div>${rob || (S.Hm ? '<div>로봇 태그(ID 0~7)가 보이지 않습니다</div>' : '')}`;
+    const frozen = S.video && S.lastFrame && performance.now() - S.lastFrame > 2500;
+    $('#ocLive').innerHTML = `<hr>${frozen ? '<div class="bad">⚠️ 영상이 멈췄습니다 — 창이 가려졌거나 카메라가 끊겼습니다. 이 창을 앞으로 가져오거나 「카메라 켜기」를 다시 누르세요.</div>' : ''}${S.drawErr ? `<div class="bad">오류: ${S.drawErr}</div>` : ''}<div>${S.W ? `${S.W}×${S.H_img()}` : '영상 없음'} · 검출 ${f0(S.ms)} ms · ${S.photo ? '사진' : f1(S.fps) + ' fps'}</div><div>매트 태그: ${mats.join(', ') || '없음'} · 맞춤: ${S.via === 'tags' ? '태그' : S.via === 'clicks' ? '클릭' : '—'}</div><div>${camTxt}</div>${rob || (S.Hm ? '<div>로봇 태그(ID 0~7)가 보이지 않습니다</div>' : '')}`;
     const hint = win.querySelector('#ocHint');
     hint.textContent = st === 2 ? '번호 원 가운데를 클릭하세요 (파란 점). 분홍 선 = 계산한 매트 그림 — 실제 매트 선과 겹치면 맞은 것입니다.' : '초록 = 저장된 모서리 태그 · 노랑 = 아직 저장 안 된 태그 · 주황 = 로봇 태그 · 빨간 화살표 = 보정한 로봇 위치와 방향';
   };
