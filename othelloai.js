@@ -1,4 +1,6 @@
-// othelloai.js — 시뮬레이터 경기장 "WRL 로봇 배틀 오셀로 AI" (umc.js 다음에 불러옵니다)
+// othelloai.js — 시뮬레이터 경기장 "WRL 로봇 배틀 오셀로 AI"와 "로봇 배틀 오셀로 V2" (umc.js 다음에 불러옵니다)
+//   · V2: 2396×1196mm 직사각형 경기장 (2026 RRK 오셀로 경기장 도면, 로보레이브 대만 오픈 2026). 판·가운데 블록·플리퍼·상대 로봇은 AI 경기장과 같고,
+//         진영마다 스타트 타깃(노란 콘)이 있습니다. 바로 가기: index.html?sim=othello_v2 (simlink.js)
 //   · WRL 로봇 배틀 오델로 경기장(≈198cm 팔각, 높이 30cm)과 같은 크기·배치. 경기장은 회색조, 오셀로 판은 빨강·파랑 그대로.
 //   · 오셀로 판: 왼쪽 팀 = 빨강 면이 위, 오른쪽 팀 = 파랑 면이 위. AI 경기장에는 콘이 없습니다.
 //   · 상대 로봇: 같은 로봇·같은 블록 프로그램을 반대편에서 실행 (허스키렌즈 학습 색만 빨강↔파랑) — 아래 '상대 로봇'.
@@ -17,6 +19,8 @@
     '같은 코드 · 빨강↔파랑 학습 색': ['same code · red↔blue learned colours', '同じコード · 赤↔青の学習色', '相同代码 · 红↔蓝学习颜色', 'mismo código · rojo↔azul aprendidos'],
     '상대 로봇이 떨어졌습니다': ['the opponent fell off', '相手ロボットが落ちました', '对手机器人掉下去了', 'el oponente se cayó'],
   });
+  const KEY2 = 'othello_v2', LABEL2 = '로봇 배틀 오셀로 V2 (2396×1196)';
+  if (U.i18n) U.i18n[LABEL2] = ['Robot Battle Othello V2 (2396×1196)', 'ロボットバトル・オセロ V2 (2396×1196)', '机器人对战黑白棋 V2 (2396×1196)', 'Batalla de robots Othello V2 (2396×1196)'];
   const T = k => (U.T ? U.T(k) : k), esc = U.esc || (s => String(s));
   const base = U.mats.othello;
   const circ = (c, x, y, r) => { c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); };
@@ -47,7 +51,9 @@
       out.push({ kind: 'oblock', shape: 'box', w: 20, d: 120, hgt: 120, mass: .03, x: 0, z: 0, color: 0x9a9ea3, sides: [RED, BLUE] });
       return out;
     },
-    info() {
+    info: () => info(),
+  };
+  function info() {
       let b = 0, w = 0, blk = '';
       for (const t of U.props()) {
         if (t.fallen) continue;
@@ -62,8 +68,50 @@
       const opp = O ? `<br><button class="small" style="margin-top:3px" onpointerdown="window.__othelloAI&&window.__othelloAI.toggleOpp()">🤖 ${esc(T('상대 로봇'))}: ${esc(O.on ? T('켜짐') : T('꺼짐'))}</button>` +
         (O.on ? ` <span style="font-weight:400">${esc(T('같은 코드 · 빨강↔파랑 학습 색'))}${O.fell ? ' · ' + esc(T('상대 로봇이 떨어졌습니다')) : ''}${O.err ? ' · ⚠ ' + esc(O.err.slice(0, 80)) : ''}</span>` : '') : '';
       return `<span class="sw-dot" style="background:#d22323"></span>${esc(T('빨강'))} ${b} : ${w} ${esc(T('파랑'))}<span class="sw-dot" style="background:#1e5ac8"></span>` + (blk ? ` · ${blk}` : '') + opp;
+  }
+  // ───────── V2 경기장: 2396×1196mm (2026 RRK 오셀로 경기장 도면, 1px = 1mm) ─────────
+  //   가장자리 검은 띠 30mm, 녹색 중앙선, 진영 막대 20×500(안쪽 면이 중앙선에서 300mm),
+  //   판 자리 Ø120 ×5 (중심이 중앙선에서 240mm, 120mm 간격), 가운데 블록 자리 20×120,
+  //   출발 구역 250×250 (중심이 끝선에서 465mm), 스타트 타깃 원: 가운데 Ø150(끝선에서 150mm)·모서리 Ø120 2개.
+  const V2 = {
+    w: 2396, h: 1196, raise: 300, side: 0x8a8f96,
+    start: { x: -734, z: 0, th: Math.PI / 2 }, key: KEY2, label: LABEL2,
+    draw(n) {
+      const W = 2396, H = 1196, R = '#e60012', B = '#0b4ea2';
+      n.fillStyle = '#221a18'; n.fillRect(0, 0, W, H);                 // 바깥 검은 띠 (30mm)
+      n.fillStyle = '#b5b5b6'; n.fillRect(30, 30, W - 60, H - 60);      // 회색 경기면
+      n.fillStyle = '#1f8a5b'; n.fillRect(1197, 30, 3, H - 60);          // 녹색 중앙선
+      n.fillStyle = R; n.fillRect(878, 348, 20, 500);                    // 진영 막대
+      n.fillStyle = '#1d2088'; n.fillRect(1498, 348, 20, 500);
+      n.lineWidth = 2;
+      for (let k = 0; k < 5; k++) {                                      // 판 자리 Ø120
+        n.strokeStyle = R; circ(n, 958, 358 + 120 * k, 60); n.stroke();
+        n.strokeStyle = B; circ(n, 1438, 358 + 120 * k, 60); n.stroke();
+      }
+      n.strokeStyle = R; n.strokeRect(1188, 538, 10, 120);               // 가운데 블록 자리 20×120
+      n.strokeStyle = B; n.strokeRect(1198, 538, 10, 120);
+      n.strokeStyle = R; n.strokeRect(339, 473, 250, 250);               // 출발 구역 250×250
+      n.strokeStyle = B; n.strokeRect(1807, 473, 250, 250);
+      n.lineWidth = 1.5;
+      const rings = (x, y, rs, c) => { n.strokeStyle = c; for (const r of rs) { circ(n, x, y, r); n.stroke(); } };
+      for (const [x, y, rs] of [[150, 598, [75, 70, 60, 55, 38, 33]], [172, 176, [60, 55, 38, 33]], [172, 1020, [60, 55, 38, 33]]]) {
+        rings(x, y, rs, R); rings(W - x, y, rs, B);                     // 스타트 타깃 원
+      }
     },
+    props: () => {
+      const out = [];
+      for (let k = 0; k < 5; k++) {
+        const z = -240 + 120 * k;
+        out.push({ kind: 'disc', shape: 'cyl', r: 60, hgt: 20, mass: .025, x: -240, z, top: RED, bottom: BLUE });
+        out.push({ kind: 'disc', shape: 'cyl', r: 60, hgt: 20, mass: .025, x: 240, z, top: BLUE, bottom: RED });
+      }
+      out.push({ kind: 'oblock', shape: 'box', w: 20, d: 120, hgt: 120, mass: .03, x: 0, z: 0, color: 0x9a9ea3, sides: [RED, BLUE] });
+      for (const t of [-1, 1]) out.push({ kind: 'cone', shape: 'cone', r: 40, hgt: 80, mass: .015, x: t * 1048, z: 0, color: 0xfac80a }); // 스타트 타깃
+      return out;
+    },
+    info: () => info(),
   };
+  const MATS = [mat, V2], on = () => MATS.includes(U.mat());
   // 가운데 블록이 어느 면을 위로 했는지: 블록의 −x 면(빨강)이 위면 → 빨강 팀
   //   물리엔진이 꺼져 있으면(간단 모드) 블록은 넘어지지 않고 미끄러지기만 합니다.
   function face(t) {
@@ -77,26 +125,30 @@
   }
   // 경기장 둘레 바닥(앱 기본은 나무색)도 회색으로
   let scene = null;
-  mat.extras = grp => { scene = grp.parent || null; setTimeout(() => { scene = grp.parent || scene; grey(); }, 0); };
+  mat.extras = V2.extras = grp => { scene = grp.parent || null; setTimeout(() => { scene = grp.parent || scene; grey(); }, 0); };
   const grey = () => {
-    if (!scene || U.mat() !== mat) return;
-    for (const m of scene.children) if (m.isMesh && m.geometry && m.geometry.type === 'BoxGeometry' && m.material && m.material.color && m.geometry.parameters && m.geometry.parameters.width === mat.w + 1000 && m.geometry.parameters.height === 20) m.material.color.setHex(0x9b9d9f);
+    if (!scene || !on()) return;
+    const W = U.mat().w;
+    for (const m of scene.children) if (m.isMesh && m.geometry && m.geometry.type === 'BoxGeometry' && m.material && m.material.color && m.geometry.parameters && m.geometry.parameters.width === W + 1000 && m.geometry.parameters.height === 20) m.material.color.setHex(0x9b9d9f);
   };
-  U.mats[KEY] = mat;
+  U.mats[KEY] = mat; U.mats[KEY2] = V2;
 
-  // 매트 목록: 기존 오델로 바로 아래
+  // 매트 목록: 기존 오델로 바로 아래에 AI, 그 아래 V2
   const addOpt = () => {
-    const sel = document.querySelector('#simMat'); if (!sel || sel.querySelector(`option[value="${KEY}"]`)) return !!sel;
-    const o = document.createElement('option'); o.value = KEY; o.dataset.ko = LABEL; o.textContent = T(LABEL);
-    const ref = sel.querySelector('option[value="othello"]');
-    if (ref) ref.after(o); else sel.appendChild(o);
+    const sel = document.querySelector('#simMat'); if (!sel) return false;
+    let ref = sel.querySelector('option[value="othello"]');
+    for (const [k, l] of [[KEY, LABEL], [KEY2, LABEL2]]) {
+      let o = sel.querySelector(`option[value="${k}"]`);
+      if (!o) { o = document.createElement('option'); o.value = k; o.dataset.ko = l; o.textContent = T(l); if (ref) ref.after(o); else sel.appendChild(o); }
+      ref = o;
+    }
     return true;
   };
   if (!addOpt()) { const iv = setInterval(() => { if (addOpt()) clearInterval(iv); }, 500); }
 
   // 가운데 블록 모양: 앱은 두 색을 위/아래로 나누므로, 왼쪽(빨강)·오른쪽(파랑) 반쪽으로 다시 만듭니다.
   const skin = () => {
-    const T3 = window.__cad && window.__cad.THREE; if (!T3 || U.mat() !== mat) return;
+    const T3 = window.__cad && window.__cad.THREE; if (!T3 || !on()) return;
     for (const o of U.props()) {
       if (o.kind !== 'oblock' || !o.mesh || o.mesh.userData.oa) continue;
       for (const c of o.mesh.children) c.visible = false;
@@ -168,10 +220,10 @@
   //   · 상대 로봇은 간단 모드(2D)로 움직입니다: 바퀴 속도로 위치 계산, 판·블록은 밀어냄, 경기장 밖으로 나가면 떨어짐.
   //   · 두 로봇은 서로 겹치지 않게 상대 로봇이 멈춥니다. 내 로봇의 센서·카메라에는 상대 로봇이 보이지 않습니다.
   const OPP = { on: true, pose: null, M: {}, db: null, cmd: null, waits: [], t0: 0, token: 0, run: false, fell: false, clone: null, cloneFor: null, rigMap: [], arms: [], err: '' };
-  const oppStart = () => { const s = mat.start; return { x: -s.x, z: s.z, th: s.th + Math.PI }; };
+  const oppStart = () => { const s = U.mat().start; return { x: -s.x, z: s.z, th: s.th + Math.PI }; };
   const oppReset = () => { OPP.token++; OPP.run = false; OPP.pose = oppStart(); OPP.M = {}; OPP.db = null; OPP.cmd = null; for (const w of OPP.waits) w.rej && w.rej(STOP); OPP.waits = []; OPP.fell = false; OPP.err = ''; };
   const STOP = new Error('opp-stop');
-  const inOct = (x, z) => Math.abs(x) <= mat.w / 2 && Math.abs(z) <= mat.h / 2 && Math.abs(x) + Math.abs(z) <= mat.w - mat.cut;
+  const inOct = (x, z) => { const m = U.mat(); return Math.abs(x) <= m.w / 2 && Math.abs(z) <= m.h / 2 && (m.shape !== 'oct' || Math.abs(x) + Math.abs(z) <= m.w - m.cut); };
   const mo = p => OPP.M[p] || (OPP.M[p] = { pos: 0, zero: 0, cmd: null, dir: 1 });
   const waitT = (t, tok) => new Promise((res, rej) => OPP.waits.push({ t, res, rej, tok }));
   const oppApi = () => {
@@ -312,7 +364,7 @@
   let lastT = 0, wasRun = false, propsRef = null;
   const tickAll = async () => {
     requestAnimationFrame(tickAll);
-    if (!X || U.mat() !== mat) { if (OPP.clone) { dropClone(); } wasRun = false; return; }
+    if (!X || !on()) { if (OPP.clone) { dropClone(); } wasRun = false; return; }
     const R = X.robot, T3 = window.__cad.THREE; if (!R || !R.root || !T3) return;
     if (R !== rigFor) { rigFor = R; arms = armsOf(R); }
     // 상대 로봇
@@ -334,7 +386,7 @@
         }
       }
       const P = OPP.pose, c = OPP.clone;
-      c.position.set(P.x, OPP.fell ? -(mat.raise || 0) : 0, P.z); c.rotation.set(0, P.th, 0); c.quaternion.setFromEuler(c.rotation);
+      c.position.set(P.x, OPP.fell ? -(U.mat().raise || 0) : 0, P.z); c.rotation.set(0, P.th, 0); c.quaternion.setFromEuler(c.rotation);
       for (const rg of OPP.rigMap) { const m = OPP.M[rg.port]; rg.pivot.quaternion.setFromAxisAngle(rg.axis, -((m && m.pos) || 0) * rg.k * Math.PI / 180); }
       if (OPP.arms.length) flipCheck(c, OPP.arms);
     } else if (!OPP.on && OPP.clone) { oppStop(); dropClone(); }

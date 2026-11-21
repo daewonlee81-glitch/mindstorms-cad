@@ -51,7 +51,8 @@ index.html
 | cadmech.js | CAD ⟳ 회전 실험 (축·기어) | `__mech` | `__cad` |
 | umc.js | UMC 미지 미션·Robofest 경기장, 학습기 경기장 훅 | `__trx` `__umcGuide` `__umcNew` `__umcDebug` | `__umc` (patch_trx) |
 | rfmodels.js | Robofest 3D 준비물 모형 | `__rfDisp` | `__umc` |
-| othelloai.js | WRL 오셀로 AI 경기장·상대 로봇 | `__othelloAI` | `__umc` `__husky` |
+| othelloai.js | WRL 오셀로 AI 경기장·**오셀로 V2 경기장(2396×1196)**·상대 로봇 | `__othelloAI` | `__umc` `__husky` |
+| simlink.js | 바로 가기 링크 `?sim=<경기장 키>` (예: `?sim=othello_v2`) — 시뮬레이터를 열고 경기장 선택 | `__simLink` | `__wb` `#simMat` |
 | simsave.js | 💾 코드 저장·📂 열기 | `__simCode` | `__wb` |
 | line2.js | 라인트레이싱 학습 센서 2개 | `__line2` | 훅 9 |
 | trainmodel.js | 학습 모델 고르기·🧠 신경망(뉴로에볼루션)·「신경망으로 주행」 블록 | `__trs` `__nnF` `__trainModel` | `__wb` `__umc` (patch_trx) |
