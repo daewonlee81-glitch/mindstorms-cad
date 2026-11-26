@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vcc 2027 Deep Safari 시뮬레이터 · RoboMakers</title>
+<!--
+  Robofest 2027 Vcc (Vision Centric Challenge) "Deep Safari" 연습·채점 시뮬레이터
+  규정: Vcc 2027 Rules V2 (2026-11-05) + Supplemental Q&A (2026-11-13), robofest.net
+  · 심판 슬라이드쇼: Level 1(동물 1마리·단순 배경) / Level 2(여러 마리·복잡한 배경·글자), 15장 × 6초, 같은 파일 = 같은 씨앗 번호
+  · 팀 시스템: 🤖 가상 팀(정확도·반응 시간·흔들림·출력 방식) 또는 📷 AI 카메라(브라우저 MobileNet v2 + 내 사진으로 가르치기, 시뮬레이션 카메라 / 실제 웹캠)
+  · 자동 채점: 6초 창마다 화면 출력·음성 따로, 처음 나타난(말하기 시작한) 시각 기준, 틀린 답이 하나라도 있으면 0, 맞는 답 여러 번이면 50%
+  기본 그림은 운영체제 이모지(그림 문자)와 직접 그린 그림입니다 — 공식 대회 이미지는 들어 있지 않습니다.
+  RoboMakers · Daewon Lee · robot-league@naver.com
+-->
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --ink:#1d2430; --mute:#6b7280; --line:#e3e6eb; --acc:#1f6feb; --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; align-items:center; gap:12px; padding:10px 18px; background:#10233f; color:#fff; }
+  header img { height:30px; background:#fff; border-radius:6px; padding:2px 6px; }
+  header h1 { font-size:18px; margin:0; font-weight:700; }
+  header .sub { color:#b9c6da; font-size:12px; }
+  header a { color:#9cc3ff; font-size:12px; margin-left:auto; }
+  header a + a { margin-left:12px; }
+  main { display:grid; grid-template-columns: minmax(0,1fr) 340px; gap:14px; padding:14px 18px; max-width:1500px; margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .lbl { font-size:12px; color:var(--mute); margin-bottom:4px; }
+  .monitor { background:#111; border-radius:10px; padding:10px; position:relative; }
+  #show { width:100%; aspect-ratio:16/9; display:block; background:#000; border-radius:4px; }
+  .bar { height:6px; background:#333; border-radius:3px; margin-top:8px; overflow:hidden; }
+  #prog { height:100%; width:0; background:#4ea1ff; }
+  #slideInfo { color:#cfd6e0; font-size:12px; margin-top:6px; display:flex; justify-content:space-between; }
+  .row3 { display:grid; grid-template-columns: 330px 1fr 1fr; gap:12px; margin-top:12px; }
+  #camView { width:320px; height:240px; background:#222; border-radius:6px; display:block; cursor:crosshair; }
+  #answer { font-size:44px; font-weight:800; min-height:64px; letter-spacing:.5px; }
+  #answer.fresh { color:var(--acc); }
+  #spoken { color:var(--mute); }
+  #debug { font:12px/1.5 ui-monospace, Menlo, monospace; white-space:pre-wrap; color:#374151; max-height:220px; overflow:auto; }
+  aside .card { margin-bottom:12px; }
+  aside h3 { margin:0 0 8px; font-size:14px; }
+  .f { display:flex; align-items:center; gap:8px; margin:6px 0; flex-wrap:wrap; }
+  .f > label:first-child { min-width:92px; color:#374151; }
+  .f input[type=range] { flex:1; min-width:110px; }
+  .f output { min-width:46px; text-align:right; font-variant-numeric:tabular-nums; color:var(--mute); }
+  input[type=number] { width:80px; }
+  select, input, button { font:inherit; }
+  button { border:1px solid var(--line); background:#fff; border-radius:8px; padding:6px 10px; cursor:pointer; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#fff; font-weight:700; }
+  button:disabled { opacity:.5; cursor:default; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .seg label { padding:4px 10px; cursor:pointer; border-right:1px solid var(--line); }
+  .seg label:last-child { border-right:0; }
+  .seg input { display:none; }
+  .seg input:checked + span { color:var(--acc); font-weight:700; }
+  .hint { font-size:12px; color:var(--mute); margin:4px 0 0; }
+  .mode { display:none; } .mode.on { display:block; }
+  #status { font-size:12px; color:var(--mute); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { border-bottom:1px solid var(--line); padding:5px 6px; text-align:left; vertical-align:top; }
+  th { background:#f7f8fa; font-weight:600; }
+  td.pts { text-align:right; font-variant-numeric:tabular-nums; font-weight:700; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+  .tot { font-size:16px; font-weight:800; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .tchips span { display:inline-block; font-size:11px; border:1px solid var(--line); border-radius:10px; padding:0 6px; margin:2px 2px 0 0; }
+  .tchips span.z { color:#bbb; }
+  details summary { cursor:pointer; font-weight:600; }
+  .rules li { margin:3px 0; }
+  #log { font:12px/1.45 ui-monospace, Menlo, monospace; max-height:200px; overflow:auto; white-space:pre; color:#374151; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } .row3 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <img src="logo.png" alt="RoboMakers" onerror="this.style.display='none'">
+  <div>
+    <h1>Vcc 2027 · Deep Safari 시뮬레이터</h1>
+    <div class="sub">Robofest Vision Centric Challenge 연습·채점 — 규정 V2 (2026-11-05) · Q&A (2026-11-13) 기준</div>
+  </div>
+  <a href="https://www.robofest.net/index.php/current-competitions/vision-centric-challenge" target="_blank" rel="noopener">공식 규정 (robofest.net)</a>
+  <a href="./">← 로보메이커스 캐드</a>
+</header>
+
+<main>
+  <section>
+    <div class="monitor">
+      <canvas id="show" width="960" height="540"></canvas>
+      <div class="bar"><div id="prog"></div></div>
+      <div id="slideInfo"><span id="slideNo">준비</span><span id="clock">0.0 s</span></div>
+    </div>
+
+    <div class="row3">
+      <div class="card">
+        <div class="lbl">팀 카메라가 보는 그림 <span id="camNote" class="hint">(🤖 가상 팀은 카메라를 쓰지 않습니다)</span></div>
+        <canvas id="camView" width="640" height="480"></canvas>
+        <div class="hint" id="roiHint">실제 웹캠일 때는 마우스로 끌어서 모니터 부분(ROI)을 고를 수 있습니다 (Q&amp;A D: 허용).</div>
+      </div>
+      <div class="card">
+        <div class="lbl">최종 답 — 채점하는 칸 (출력 + 말하기)</div>
+        <div id="answer">—</div>
+        <div id="spoken">🔊 —</div>
+        <p class="hint">Q&amp;A A: 심판은 이 칸만 봅니다. 개발 정보(후보 목록)는 따로 보여 주면 채점하지 않습니다.</p>
+      </div>
+      <div class="card">
+        <div class="lbl">개발 정보 — 채점 안 함</div>
+        <div id="debug">시작하면 후보와 확신도가 여기에 나옵니다.</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="grid2">
+        <div><h3 style="margin:0">📋 채점표 <span id="resTitle" class="hint"></span></h3></div>
+        <div style="text-align:right">
+          <span id="total" class="tot"></span>
+          <button id="csvBtn" disabled>⬇ 채점표 CSV</button>
+        </div>
+      </div>
+      <div id="sum2" class="hint"></div>
+      <table id="sheet"><thead><tr><th>순번</th><th>정답</th><th>화면 출력 (시각)</th><th>음성 (시각)</th><th style="text-align:right">점수</th><th>메모</th></tr></thead><tbody></tbody></table>
+      <details style="margin-top:8px"><summary>출력 기록 (모든 출력·말하기, 슬라이드쇼 시작부터 초)</summary><div id="log"></div></details>
+    </div>
+
+    <div class="card rules" style="margin-top:12px">
+      <details>
+        <summary>규정 요약 — Vcc 2027 Deep Safari</summary>
+        <ul>
+          <li><b>과제</b>: 모니터에 나오는 동물 그림을 웹캠 1대로 보고 25종 중 하나로 <b>화면에 출력</b>하고 <b>소리로 말하기</b>. 고등부(9~12학년), 팀 최대 4명, 완전 자율.</li>
+          <li><b>Level 1</b>: 다 자란 수컷 1마리, 단순한 배경, 글자 없음(실사·생성·클립아트, 크기·회전 다양) — 15장 × 최소 6초.</li>
+          <li><b>Level 2</b>: 같은 종 여러 마리, 모든 나이·성별, 사람·글자·물건이 있는 복잡한 배경 — 15장 × 6초. 다른 종이 섞이지 않음(Q&amp;A E). 글자가 다른 동물 이름이어도 <b>그림의 동물</b>이 정답(Q&amp;A F).</li>
+          <li><b>답</b>: 25개 이름만 — Armadillo, Bear, Bison, Camel, Cow, Crocodile, Deer, Elephant, Fox, Frog, Giraffe, Gorilla, Hippopotamus, Horse, Kangaroo, Leopard, Lion, Ostrich, Panda, Rabbit, Rhinoceros, Sheep, Tiger, Turtle, Zebra. "Polar Bear", "Giant Panda", "Sea Turtle", "Alligator" 처럼 다른 이름은 오답. "Tiger - Animal"처럼 정답 낱말이 들어 있으면 정답.</li>
+          <li><b>점수</b>: 6초 창마다 화면 출력과 말하기를 따로 채점 — Level 1은 각 1점, Level 2는 각 2점. 맞는 답 한 번 = 만점, 맞는 답 여러 번 = 50%, 창 안에 틀린 답이 하나라도 있으면 0점("Cat" 했다가 "Tiger"로 고쳐도 0점).</li>
+          <li><b>시각</b>: 출력이 처음 나타난 시각 / 말하기 시작한 시각으로 창을 정함. 앞 그림 때 시작한 출력은 앞 창으로 채점, 따로 유예 시간 없음(Q&amp;A B).</li>
+          <li><b>순위</b>: Level 1 + Level 2 (최대 30 + 60 = 90). 동점이면 Level 2 점수, 그다음 Level 2 다시 하기(새 그림·더 먼 거리·밝기·빠른 전환·가림).</li>
+          <li><b>진행</b>: 아침에 모니터 공개 → 3분 연습 → 보관 → 준비 1분(코드 수정 금지, 카메라 번호·ROI 고르기 같은 화면 조작은 가능 — Q&amp;A D) → 심판이 시작 → 5분 조정 → Level 2. 모니터와 카메라 거리 최소 0.4m, 모니터 크기·받침 높이는 당일 공개. 모니터 밝기·대비가 바뀔 수 있음. Wi-Fi·클라우드 허용(2027).</li>
+        </ul>
+        <p class="hint">이 시뮬레이터의 기본 그림은 이모지·직접 그린 그림(클립아트 수준)입니다. 실제 사진 연습은 ① 대회 설정 → 「📂 내 그림 폴더」로 하세요(파일·폴더 이름에 동물 이름: <code>zebra_01.jpg</code>, <code>Lion/a.png</code>, <code>얼룩말 3.jpg</code>).</p>
+      </details>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h3>① 대회 설정 (심판)</h3>
+      <div class="f"><label>레벨</label>
+        <span class="seg"><label><input type="radio" name="lv" value="1" checked><span>Level 1</span></label><label><input type="radio" name="lv" value="2"><span>Level 2</span></label></span></div>
+      <div class="f"><label>그림 수 · 시간</label><input type="number" id="nSlides" min="3" max="40" value="15"> 장 ×
+        <select id="dur"><option value="6" selected>6초 (공식)</option><option value="4">4초</option><option value="3">3초 (동점 재경기)</option></select></div>
+      <div class="f"><label>순서</label><select id="order"><option value="rand" selected>무작위 (씨앗 번호)</option><option value="sample">공식 채점표 예시 순서</option></select>
+        <input type="number" id="seed" value="2027" title="같은 씨앗 번호 = 같은 슬라이드쇼 (모든 팀 같은 파일)"></div>
+      <div class="f"><label>그림</label><select id="imgSrc"><option value="builtin">기본 그림 (이모지)</option><option value="mine" disabled>내 그림 폴더</option></select>
+        <label><button id="loadImgs" type="button">📂 내 그림 폴더</button><input type="file" id="imgFiles" webkitdirectory multiple accept="image/*" hidden></label></div>
+      <div class="hint" id="imgCount"></div>
+      <div class="f"><label>모니터 밝기</label><input type="range" id="bright" min="40" max="160" value="100"><output id="brightO">100%</output></div>
+      <div class="f"><label>모니터 대비</label><input type="range" id="contrast" min="40" max="160" value="100"><output id="contrastO">100%</output></div>
+      <div class="f"><label>가림</label><input type="range" id="occl" min="0" max="40" value="0"><output id="occlO">없음</output></div>
+      <div class="f"><label>빠르게</label><select id="speed"><option value="1">1× (실제 시간)</option><option value="2">2×</option><option value="4">4×</option></select>
+        <span class="hint">2×·4×는 소리 없이 기록만</span></div>
+      <div class="f"><button id="popBtn" type="button">🖥 심판 화면 새 창</button><span class="hint">다른 모니터에 띄우고 실제 웹캠으로 보기</span></div>
+    </div>
+
+    <div class="card">
+      <h3>② 팀 시스템</h3>
+      <div class="f"><span class="seg"><label><input type="radio" name="team" value="virtual" checked><span>🤖 가상 팀</span></label><label><input type="radio" name="team" value="ai"><span>📷 AI 카메라</span></label></span></div>
+
+      <div class="mode on" id="mode-virtual">
+        <p class="hint" style="margin-top:0">그림을 실제로 보지는 않고, 정해 둔 확률대로 답을 냅니다. 출력 방식에 따라 점수가 어떻게 깎이는지 보기 좋습니다.</p>
+        <div class="f"><label>정확도</label><input type="range" id="vAcc" min="0" max="100" value="85"><output id="vAccO">85%</output></div>
+        <div class="f"><label>반응 시간</label><input type="range" id="vLat" min="2" max="70" value="12"><output id="vLatO">1.2 s</output></div>
+        <div class="f"><label>흔들림</label><input type="range" id="vFlk" min="0" max="100" value="20"><output id="vFlkO">20%</output></div>
+        <p class="hint" style="margin:-2px 0 4px">흔들림 = 처음에 비슷한 동물을 잠깐 고른 뒤 바로 고침</p>
+        <div class="f"><label>출력 방식</label><select id="vOut">
+          <option value="once" selected>장면마다 한 번 (확정 후)</option>
+          <option value="change">답이 바뀔 때마다</option>
+          <option value="repeat">2초마다 반복</option></select></div>
+        <div class="f"><label>말하기</label><label><input type="checkbox" id="vSpeak" checked> 출력할 때 같이 말하기</label></div>
+      </div>
+
+      <div class="mode" id="mode-ai">
+        <p class="hint" style="margin-top:0">브라우저 안 MobileNet v2(ImageNet)로 그림을 보고 판단합니다. 처음 한 번 모델(약 14MB)을 내려받습니다.</p>
+        <div class="f"><label>카메라</label><select id="camSrc"><option value="sim" selected>시뮬레이션 카메라</option><option value="webcam">실제 웹캠</option></select>
+          <select id="camDev" hidden></select></div>
+        <div id="simCamOpts">
+          <div class="f"><label>거리</label><input type="range" id="cDist" min="40" max="250" value="80"><output id="cDistO">0.8 m</output></div>
+          <div class="f"><label>각도</label><input type="range" id="cAng" min="0" max="45" value="10"><output id="cAngO">10°</output></div>
+          <div class="f"><label>흐림 · 잡음</label><input type="range" id="cBlur" min="0" max="6" value="1" style="min-width:70px"><input type="range" id="cNoise" min="0" max="40" value="8" style="min-width:70px"></div>
+          <div class="f"><label>모니터만 잘라 보기</label><label><input type="checkbox" id="cRoi" checked> ROI 자동</label></div>
+        </div>
+        <div class="f"><label>두뇌</label><select id="brain">
+          <option value="auto" selected>자동 (가르친 사진이 있으면 그것)</option>
+          <option value="imagenet">ImageNet 그대로 (가르치기 없음)</option>
+          <option value="knn">내가 가르친 것만</option></select></div>
+        <div class="f"><label>확신도 ≥</label><input type="range" id="aTh" min="20" max="95" value="50"><output id="aThO">50%</output></div>
+        <div class="f"><label>연속 같은 답</label><input type="range" id="aN" min="1" max="8" value="3"><output id="aNO">3번</output></div>
+        <div class="f"><label>출력 방식</label><label><input type="checkbox" id="aLock" checked> 장면마다 한 번만 (화면 바뀜을 감지하면 다시)</label></div>
+        <div class="f"><label>말하기</label><label><input type="checkbox" id="aSpeak" checked> 출력할 때 같이 말하기</label></div>
+        <details style="margin-top:6px" open>
+          <summary>🧑‍🏫 가르치기 (전이 학습 · kNN)</summary>
+          <p class="hint">「기본 그림으로 가르치기」는 Level 1 그림 25종 × 8장을 모니터에 띄워 지금 카메라 설정으로 찍어 가르칩니다(시합 슬라이드쇼와 다른 그림). ImageNet 에는 기린(Giraffe)·코뿔소(Rhinoceros)가 없고 사슴(Deer)은 영양 종류로 대신합니다. 각 동물 사진 몇 장을 가르치면 MobileNet 의 특징(1280개 숫자)으로 가장 비슷한 사진을 찾아 답합니다.</p>
+          <div class="f">
+            <button id="teachBuiltin" type="button">기본 그림으로 가르치기</button>
+            <label><button id="teachLoad" type="button">📂 사진 폴더</button><input type="file" id="teachFiles" webkitdirectory multiple accept="image/*" hidden></label>
+            <button id="teachClear" type="button">지우기</button>
+          </div>
+          <div class="tchips" id="teachChips"></div>
+        </details>
+        <div class="f"><button id="checkBtn" type="button">📊 빠른 정확도 점검 (그림 50장)</button></div>
+        <div class="hint" id="aiStatus">모델: 아직 안 불러옴</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="f" style="margin:0">
+        <button id="startBtn" class="primary">▶ 심판 시작</button>
+        <button id="stopBtn" disabled>■ 멈춤</button>
+        <button id="previewBtn" type="button" title="슬라이드쇼 그림을 미리 넘겨 봅니다 (채점 안 함)">👁 미리 보기</button>
+      </div>
+      <div id="status" style="margin-top:6px">준비됨</div>
+    </div>
+  </aside>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+
+  // ───────── 25종 (규정 슬라이드 7~9, 12) ─────────
+  const ANIMALS = [
+    ['Armadillo', '아르마딜로', null], ['Bear', '곰', '🐻'], ['Bison', '들소', '🦬'], ['Camel', '낙타', '🐫'], ['Cow', '소', '🐄'],
+    ['Crocodile', '악어', '🐊'], ['Deer', '사슴', '🦌'], ['Elephant', '코끼리', '🐘'], ['Fox', '여우', '🦊'], ['Frog', '개구리', '🐸'],
+    ['Giraffe', '기린', '🦒'], ['Gorilla', '고릴라', '🦍'], ['Hippopotamus', '하마', '🦛'], ['Horse', '말', '🐎'], ['Kangaroo', '캥거루', '🦘'],
+    ['Leopard', '표범', '🐆'], ['Lion', '사자', '🦁'], ['Ostrich', '타조', null], ['Panda', '판다', '🐼'], ['Rabbit', '토끼', '🐇'],
+    ['Rhinoceros', '코뿔소', '🦏'], ['Sheep', '양', '🐑'], ['Tiger', '호랑이', '🐅'], ['Turtle', '거북', '🐢'], ['Zebra', '얼룩말', '🦓'],
+  ].map(([en, ko, emoji]) => ({ en, ko, emoji }));
+  const NAMES = ANIMALS.map(a => a.en);
+  const KO = Object.fromEntries(ANIMALS.map(a => [a.en, a.ko]));
+  // 비슷해서 헷갈리기 쉬운 짝 (가상 팀의 오답·흔들림)
+  const CONFUSE = { Lion: ['Tiger', 'Leopard'], Tiger: ['Leopard', 'Lion'], Leopard: ['Tiger', 'Lion'], Horse: ['Zebra', 'Deer'], Zebra: ['Horse'],
+    Cow: ['Bison', 'Sheep'], Bison: ['Cow', 'Bear'], Deer: ['Kangaroo', 'Horse'], Kangaroo: ['Deer', 'Rabbit'], Rabbit: ['Kangaroo', 'Fox'],
+    Fox: ['Rabbit', 'Deer'], Bear: ['Gorilla', 'Panda'], Panda: ['Bear'], Gorilla: ['Bear'], Hippopotamus: ['Rhinoceros', 'Elephant'],
+    Rhinoceros: ['Hippopotamus', 'Elephant'], Elephant: ['Rhinoceros', 'Hippopotamus'], Crocodile: ['Turtle', 'Frog'], Turtle: ['Frog', 'Crocodile'],
+    Frog: ['Turtle'], Camel: ['Giraffe', 'Horse'], Giraffe: ['Camel', 'Deer'], Ostrich: ['Camel'], Sheep: ['Cow'], Armadillo: ['Turtle', 'Rabbit'] };
+  // 공식 채점표 SAMPLE 시트 순서 (Vcc2027Scorecard.xlsx)
+  const SAMPLE_ORDER = ['Armadillo', 'Lion', 'Leopard', 'Bear', 'Cow', 'Camel', 'Lion', 'Gorilla', 'Tiger', 'Armadillo', 'Elephant', 'Fox', 'Giraffe', 'Deer', 'Crocodile'];
+
+  // ───────── 채점 (규정 9장 · 슬라이드 15, Q&A A·B) ─────────
+  const FILL = new Set(['animal', 'animals', 'a', 'an', 'the', 'it', 'is', 'its', 'this', 'that', 'i', 'see', 'answer', 'label', 'detected', 'class']);
+  const words = s => String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean);
+  const canon = w => (w === 'armadillos' ? 'armadillo' : w);
+  // 정답 판정: 정답 낱말이 있고, 나머지는 "Animal" 같은 군더더기뿐 (Polar Bear · Giant Panda · Sea Turtle 은 오답 — 규정 FAQ)
+  const isCorrect = (text, label) => {
+    const ws = words(text).map(canon), want = label.toLowerCase();
+    if (!ws.includes(want)) return false;
+    return ws.every(w => w === want || FILL.has(w));
+  };
+  /**
+   * judge(slides, events, D, level)
+   *  slides: ['Tiger', …], events: [{ ch: 'print'|'speak', text, t }] (t = 슬라이드쇼 시작부터 초, 출력이 처음 나타난 / 말하기 시작한 시각)
+   *  → { rows: [{ seq, label, print:{evs, pts, note}, speak:{…}, pts }], total, max }
+   */
+  const judge = (slides, events, D, level) => {
+    const P = level === 2 ? 2 : 1;
+    const one = (evs, label) => {
+      if (!evs.length) return { evs, pts: 0, note: '없음' };
+      const wrong = evs.filter(e => !isCorrect(e.text, label));
+      if (wrong.length) return { evs, pts: 0, note: `틀린 답 ${wrong.map(e => '"' + e.text + '"').join(', ')} → 0` };
+      if (evs.length > 1) return { evs, pts: P / 2, note: `맞는 답 ${evs.length}번 → 50%` };
+      return { evs, pts: P, note: '' };
+    };
+    const rows = slides.map((label, i) => {
+      const inW = ch => events.filter(e => e.ch === ch && e.t >= i * D && e.t < (i + 1) * D);
+      const pr = one(inW('print'), label), sp = one(inW('speak'), label);
+      return { seq: i + 1, label, print: pr, speak: sp, pts: pr.pts + sp.pts };
+    });
+    const total = rows.reduce((s, r) => s + r.pts, 0);
+    return { rows, total, max: slides.length * 2 * P, level, D };
+  };
+
+  // ───────── 씨앗 난수 (같은 씨앗 = 같은 슬라이드쇼) ─────────
+  const rngOf = seed => { let a = (seed >>> 0) || 1; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+  const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
+
+  // ───────── 기본 그림 (이모지 + 직접 그린 아르마딜로·타조) ─────────
+  const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif';
+  const drawArmadillo = (c, s) => { // 원점 = 몸 가운데, s = 크기(px)
+    c.save(); c.scale(s / 125, s / 125);
+    c.fillStyle = '#8d7b68'; c.beginPath(); c.ellipse(0, 0, 80, 50, 0, Math.PI, 0); c.lineTo(80, 10); c.lineTo(-80, 10); c.fill();
+    c.strokeStyle = '#5e5143'; c.lineWidth = 5; for (let k = -3; k <= 3; k++) { c.beginPath(); c.moveTo(k * 18, -48 + Math.abs(k) * 4); c.lineTo(k * 18, 8); c.stroke(); }
+    c.fillStyle = '#a3917c'; c.beginPath(); c.moveTo(-78, -10); c.lineTo(-128, 8); c.lineTo(-80, 14); c.fill(); // 머리
+    c.beginPath(); c.ellipse(-96, -14, 8, 14, -0.4, 0, Math.PI * 2); c.fill(); // 귀
+    c.fillStyle = '#222'; c.beginPath(); c.arc(-104, 0, 3.5, 0, 7); c.fill();
+    c.strokeStyle = '#8d7b68'; c.lineWidth = 12; c.lineCap = 'round'; c.beginPath(); c.moveTo(78, 2); c.quadraticCurveTo(120, 10, 140, 34); c.stroke(); // 꼬리
+    c.lineWidth = 14; for (const x of [-52, -24, 30, 58]) { c.beginPath(); c.moveTo(x, 8); c.lineTo(x + 2, 34); c.stroke(); }
+    c.restore();
+  };
+  const drawOstrich = (c, s) => {
+    c.save(); c.scale(s / 200, s / 200);
+    c.strokeStyle = '#d9a38f'; c.lineCap = 'round'; c.lineWidth = 9;
+    c.beginPath(); c.moveTo(-14, 20); c.lineTo(-24, 70); c.lineTo(-20, 110); c.moveTo(14, 20); c.lineTo(22, 68); c.lineTo(14, 110); c.stroke(); // 다리
+    c.fillStyle = '#1f1f1f'; c.beginPath(); c.ellipse(0, 0, 58, 38, -0.15, 0, Math.PI * 2); c.fill(); // 몸
+    c.fillStyle = '#f2f2f2'; c.beginPath(); c.ellipse(52, -8, 22, 15, 0.5, 0, Math.PI * 2); c.fill(); // 꼬리 깃
+    c.strokeStyle = '#e0b3a2'; c.lineWidth = 10; c.beginPath(); c.moveTo(-40, -16); c.quadraticCurveTo(-58, -70, -44, -118); c.stroke(); // 목
+    c.fillStyle = '#e0b3a2'; c.beginPath(); c.ellipse(-46, -124, 12, 9, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#c98f3a'; c.beginPath(); c.moveTo(-56, -126); c.lineTo(-72, -122); c.lineTo(-56, -118); c.fill(); // 부리
+    c.fillStyle = '#111'; c.beginPath(); c.arc(-48, -127, 2.6, 0, 7); c.fill();
+    c.restore();
+  };
+  const drawAnimal = (c, name, size) => {
+    const a = ANIMALS.find(x => x.en === name);
+    if (name === 'Armadillo') return drawArmadillo(c, size);
+    if (name === 'Ostrich') return drawOstrich(c, size);
+    c.font = `${Math.round(size)}px ${EMOJI_FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(a.emoji, 0, size * 0.04);
+  };
+  const W = 960, H = 540;
+  // Level 1: 흰 배경, 동물 1마리, 크기·회전·좌우 뒤집기, 가로세로 비율 약간
+  const makeL1 = (name, r) => {
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const c = cv.getContext('2d');
+    c.fillStyle = r() < 0.7 ? '#ffffff' : pick(r, ['#f3f6f9', '#fbf7ef', '#eef5ee']); c.fillRect(0, 0, W, H);
+    c.translate(W / 2 + (r() - 0.5) * 160, H / 2 + (r() - 0.5) * 60); c.rotate((r() - 0.5) * 0.5);
+    c.scale((r() < 0.5 ? -1 : 1) * (0.9 + r() * 0.25), 0.9 + r() * 0.25);
+    drawAnimal(c, name, 250 + r() * 140);
+    return cv;
+  };
+  // Level 2: 배경(하늘·풀밭·나무·사람·자동차), 같은 종 1~4마리(크기 다양), 글자(다른 동물 이름일 수도 있음 — Q&A F)
+  const makeL2 = (name, r) => {
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const c = cv.getContext('2d');
+    const sky = c.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, pick(r, ['#8ec5ff', '#ffd59e', '#b9d7ea', '#cbbff2'])); sky.addColorStop(0.55, '#e9f2ff');
+    sky.addColorStop(0.56, pick(r, ['#9cc46b', '#c9b26b', '#7fae5a', '#d8c38a'])); sky.addColorStop(1, pick(r, ['#6f9a45', '#a8904e', '#5f8a3a']));
+    c.fillStyle = sky; c.fillRect(0, 0, W, H);
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    for (let k = 0, n = 3 + Math.floor(r() * 5); k < n; k++) { // 배경 물건
+      c.save(); c.translate(r() * W, H * (0.42 + r() * 0.5)); const s = 50 + r() * 110;
+      c.font = `${Math.round(s)}px ${EMOJI_FONT}`; c.globalAlpha = 0.95; c.fillText(pick(r, ['🌳', '🌴', '🌲', '🪨', '🧍', '🧑‍🌾', '🚙', '🏕️', '🌵', '🧒', '🚌']), 0, 0); c.restore();
+    }
+    const n = 1 + Math.floor(r() * 4);
+    for (let k = 0; k < n; k++) {
+      c.save(); const s = (n === 1 ? 230 : 120) + r() * 110;
+      c.translate(W * (0.15 + 0.7 * (n === 1 ? 0.5 + (r() - 0.5) * 0.3 : (k + 0.5) / n)) + (r() - 0.5) * 60, H * (0.55 + r() * 0.25));
+      c.rotate((r() - 0.5) * 0.3); c.scale(r() < 0.5 ? -1 : 1, 1); drawAnimal(c, name, s); c.restore();
+    }
+    if (r() < 0.75) { // 글자 (방해 요소)
+      const txt = r() < 0.45 ? pick(r, NAMES.filter(x => x !== name)).toUpperCase() : pick(r, ['SAFARI PARK', 'WILD LIFE', 'ZOO', 'Welcome!', name.toUpperCase(), 'Nature 2027']);
+      c.save(); c.font = `800 ${40 + Math.round(r() * 36)}px "Helvetica Neue",Arial,sans-serif`; c.fillStyle = pick(r, ['#ffffff', '#222222', '#ffe066', '#c0392b']);
+      c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 4; const x = W * (0.2 + r() * 0.6), y = H * (0.1 + r() * 0.15);
+      c.strokeText(txt, x, y); c.fillText(txt, x, y); c.restore();
+    }
+    return cv;
+  };
+
+  // ───────── 내 그림 폴더 (파일·폴더 이름에서 동물 이름) ─────────
+  const ALIAS = { hippo: 'Hippopotamus', rhino: 'Rhinoceros', croc: 'Crocodile', alligator: 'Crocodile', armadillos: 'Armadillo', tortoise: 'Turtle',
+    bunny: 'Rabbit', hare: 'Rabbit', buffalo: 'Bison', bull: 'Cow', cattle: 'Cow', '거북이': 'Turtle', '토끼': 'Rabbit', '들소': 'Bison', '바이슨': 'Bison' };
+  const labelOfPath = p => {
+    const toks = String(p).toLowerCase().split(/[^a-z가-힣]+/).filter(Boolean);
+    for (let i = toks.length - 1; i >= 0; i--) { // 파일 이름 먼저, 그다음 폴더
+      const t = toks[i], tSing = t.replace(/(es|s)$/, '');
+      for (const a of ANIMALS) if (t === a.en.toLowerCase() || tSing === a.en.toLowerCase() || t === a.ko) return a.en;
+      if (ALIAS[t] || ALIAS[tSing]) return ALIAS[t] || ALIAS[tSing];
+    }
+    return null;
+  };
+  const loadImages = files => Promise.all([...files].filter(f => /^image\//.test(f.type)).map(f => new Promise(res => {
+    const label = labelOfPath(f.webkitRelativePath || f.name); if (!label) return res(null);
+    const im = new Image(); im.onload = () => res({ label, img: im, name: f.webkitRelativePath || f.name }); im.onerror = () => res(null); im.src = URL.createObjectURL(f);
+  }))).then(a => a.filter(Boolean));
+  const fitImage = img => { // 그림 비율 유지, 검은 테두리 없이 흰 배경 가운데
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const c = cv.getContext('2d');
+    c.fillStyle = '#fff'; c.fillRect(0, 0, W, H); const k = Math.min(W / img.width, H / img.height);
+    c.drawImage(img, (W - img.width * k) / 2, (H - img.height * k) / 2, img.width * k, img.height * k); return cv;
+  };
+  let myImgs = []; // [{label, img, name}]
+
+  // ───────── 슬라이드쇼 만들기 ─────────
+  const lv = () => +document.querySelector('input[name=lv]:checked').value;
+  const buildShow = () => {
+    const level = lv(), n = Math.max(3, Math.min(40, +$('nSlides').value || 15)), seed = +$('seed').value || 1, r = rngOf(seed * 31 + level);
+    const useMine = $('imgSrc').value === 'mine' && myImgs.length;
+    const pool = useMine ? [...new Set(myImgs.map(x => x.label))] : NAMES;
+    let labels = [];
+    if ($('order').value === 'sample') { for (let i = 0; i < n; i++) labels.push(SAMPLE_ORDER[i % SAMPLE_ORDER.length]); labels = labels.filter(l => pool.includes(l)); while (labels.length < n) labels.push(pick(r, pool)); }
+    else for (let i = 0; i < n; i++) { let l; do l = pick(r, pool); while (pool.length > 1 && l === labels[i - 1]); labels.push(l); } // 같은 동물 연달아 X
+    const occl = +$('occl').value / 100;
+    const slides = labels.map(label => {
+      let cv;
+      if (useMine) { const c = myImgs.filter(x => x.label === label); cv = fitImage(pick(r, c).img); }
+      else cv = level === 2 ? makeL2(label, r) : makeL1(label, r);
+      if (occl > 0) { // 가림: 회색 판이 그림 일부를 덮음
+        const c = cv.getContext('2d'), w = W * Math.sqrt(occl) * (0.8 + r() * 0.4), h = H * Math.sqrt(occl) * (0.8 + r() * 0.4);
+        c.fillStyle = pick(r, ['#7a7f87', '#3b3f45', '#9aa0a8']); c.fillRect(r() * (W - w), r() * (H - h), w, h);
+      }
+      return { label, cv };
+    });
+    return { level, seed, D: +$('dur').value, slides, labels };
+  };
+
+  // ───────── 화면 (모니터 · 심판 새 창) ─────────
+  const show = $('show'), sc = show.getContext('2d');
+  let popup = null, popCv = null;
+  const paintShow = (cv, extra) => {
+    sc.save(); sc.fillStyle = '#000'; sc.fillRect(0, 0, W, H);
+    if (cv) { sc.filter = `brightness(${$('bright').value}%) contrast(${$('contrast').value}%)`; sc.drawImage(cv, 0, 0, W, H); sc.filter = 'none'; }
+    if (extra) { sc.fillStyle = 'rgba(255,255,255,.92)'; sc.font = '700 42px sans-serif'; sc.textAlign = 'center'; sc.textBaseline = 'middle'; sc.fillText(extra, W / 2, H / 2); }
+    sc.restore();
+    if (popup && !popup.closed && popCv) { const p = popCv.getContext('2d'); popCv.width = popup.innerWidth; popCv.height = popup.innerHeight;
+      const k = Math.min(popCv.width / W, popCv.height / H); p.fillStyle = '#000'; p.fillRect(0, 0, popCv.width, popCv.height);
+      p.drawImage(show, (popCv.width - W * k) / 2, (popCv.height - H * k) / 2, W * k, H * k); }
+  };
+  $('popBtn').onclick = () => {
+    popup = window.open('', 'vccJudge', 'width=1100,height=640');
+    if (!popup) return alert('팝업이 막혀 있습니다. 주소창의 팝업 허용을 눌러 주세요.');
+    popup.document.title = 'Vcc 심판 화면'; popup.document.body.style.cssText = 'margin:0;background:#000;overflow:hidden';
+    popup.document.body.innerHTML = '<canvas style="display:block;width:100vw;height:100vh"></canvas>';
+    popCv = popup.document.querySelector('canvas'); popCv.ondblclick = () => popCv.requestFullscreen && popCv.requestFullscreen();
+    paintShow(cur ? cur.slides[0].cv : null, cur ? null : 'Vcc 2027 · Deep Safari');
+  };
+
+  // ───────── 말하기 ─────────
+  const speak = text => {
+    if (!('speechSynthesis' in window) || +$('speed').value > 1) return;
+    try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = 'en-US'; u.rate = 1.1; speechSynthesis.speak(u); } catch (e) {}
+  };
+
+  // ───────── 실행 상태 ─────────
+  let cur = null, run = null, lastResult = { 1: null, 2: null };
+  const now = () => run ? (performance.now() - run.t0) * run.speed / 1000 : 0;
+  const emit = (ch, text) => {
+    if (!run) return; const t = now(); run.events.push({ ch, text, t });
+    if (ch === 'print') { $('answer').textContent = text; $('answer').classList.add('fresh'); setTimeout(() => $('answer').classList.remove('fresh'), 400); }
+    else { $('spoken').textContent = '🔊 ' + text; speak(text); }
+  };
+  const output = (text, withSpeech) => { emit('print', text); if (withSpeech) emit('speak', text); };
+
+  // ───────── 🤖 가상 팀 ─────────
+  const virtualTeam = () => {
+    const acc = +$('vAcc').value / 100, lat = +$('vLat').value / 10, flk = +$('vFlk').value / 100, mode = $('vOut').value, withSp = $('vSpeak').checked;
+    const r = rngOf((+$('seed').value || 1) * 7919 + 13);
+    const queue = []; // {t, text}
+    let lastSeen = -1, reps = []; // 반복 출력: {text, next, until}
+    return {
+      tick(t, i) {
+        if (i !== lastSeen) { // 팀이 새 그림을 "알아차리는" 시각 = 슬라이드 시작 + 반응 시간
+          lastSeen = i; const label = cur.labels[i], t0 = i * cur.D, L = Math.max(0.15, lat * (0.75 + r() * 0.5));
+          for (const p of reps) p.until = Math.min(p.until, t0 + L); // 앞 그림 반복은 바뀐 걸 알아챌 때까지 계속 (다음 창으로 넘어감 — Q&A B)
+          const wrongOf = l => pick(r, (CONFUSE[l] || NAMES).filter(x => x !== l));
+          const final = r() < acc ? label : wrongOf(label);
+          const flick = r() < flk ? wrongOf(final) : null;
+          const seq = [];
+          if (flick) { seq.push({ t: t0 + L, text: flick }); seq.push({ t: t0 + L + 0.4 + r() * 0.4, text: final }); }
+          else seq.push({ t: t0 + L, text: final });
+          if (mode === 'once') queue.push({ t: seq[seq.length - 1].t, text: final }); // 확정 후 한 번 (흔들림은 머릿속에서만)
+          else for (const s of seq) queue.push({ ...s });
+          if (mode === 'repeat') reps.push({ text: final, next: seq[seq.length - 1].t + 2, until: Infinity });
+        }
+        for (const p of reps) while (p.next <= t && p.next < p.until) { queue.push({ t: p.next, text: p.text }); p.next += 2; } // 2초마다 같은 답
+        reps = reps.filter(p => p.next < p.until);
+        queue.sort((a, b) => a.t - b.t);
+        while (queue.length && queue[0].t <= t) { const q = queue.shift(); output(q.text, withSp); dbg(`가상 팀: ${q.text}`); }
+      },
+    };
+  };
+
+  // ───────── 📷 AI 카메라 (MobileNet v2 + kNN) ─────────
+  const IMAGENET = { Armadillo: [363], Bear: [294, 295, 296, 297, 850], Bison: [347], Camel: [354], Cow: [345], Crocodile: [49, 50], Deer: [351, 352, 353],
+    Elephant: [101, 385, 386], Fox: [277, 278, 279, 280], Frog: [30, 31, 32], Giraffe: [], Gorilla: [366], Hippopotamus: [344], Horse: [339], Kangaroo: [104],
+    Leopard: [288, 289, 290, 293], Lion: [291], Ostrich: [9], Panda: [388], Rabbit: [330, 331, 332], Rhinoceros: [], Sheep: [348, 349], Tiger: [292],
+    Turtle: [33, 34, 35, 36, 37], Zebra: [340] };
+  let net = null, netLoading = null;
+  const addScript = src => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error(src)); document.head.appendChild(s); });
+  const loadNet = () => netLoading || (netLoading = (async () => {
+    $('aiStatus').textContent = '모델: 내려받는 중… (TensorFlow.js + MobileNet v2, 처음 한 번)';
+    if (!window.tf) await addScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
+    if (!window.mobilenet) await addScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js');
+    net = await mobilenet.load({ version: 2, alpha: 1.0 });
+    $('aiStatus').textContent = `모델: MobileNet v2 준비됨 (${tf.getBackend()})`;
+    return net;
+  })().catch(e => { netLoading = null; $('aiStatus').innerHTML = `<span class="bad">모델을 불러오지 못했습니다 — 인터넷 연결을 확인하세요 (${e.message})</span>`; throw e; }));
+  const AI_IN = document.createElement('canvas'); AI_IN.width = AI_IN.height = 224;
+  const softmax = a => { const m = Math.max(...a); const e = a.map(v => Math.exp(v - m)); const s = e.reduce((x, y) => x + y, 0); return e.map(v => v / s); };
+  const look = async cv => { // → { probs: {label: p}, embed: Float32Array, animalness }
+    const [logits, emb] = tf.tidy(() => [net.infer(cv, false), net.infer(cv, true)]);
+    const p = softmax(Array.from(await logits.data())), e = await emb.data(); logits.dispose(); emb.dispose();
+    const raw = {}; let sum = 0; for (const n of NAMES) { raw[n] = IMAGENET[n].reduce((s, k) => s + p[k], 0); sum += raw[n]; }
+    const probs = {}; for (const n of NAMES) probs[n] = sum > 0 ? raw[n] / sum : 0;
+    let top = 0, topI = 0; for (let k = 0; k < 1000; k++) if (p[k] > top) { top = p[k]; topI = k; }
+    return { probs, embed: Float32Array.from(e), animalness: sum, top1: { i: topI, p: top } };
+  };
+  // 가르치기: 특징(embedding) 정규화해 저장, k=5 가장 비슷한 사진 투표
+  let teach = []; // {label, v}
+  const norm = v => { let s = 0; for (const x of v) s += x * x; s = Math.sqrt(s) || 1; return v.map(x => x / s); };
+  const knn = v => {
+    const q = norm(v), sims = teach.map(t => { let s = 0; for (let k = 0; k < q.length; k++) s += q[k] * t.v[k]; return { label: t.label, s }; }).sort((a, b) => b.s - a.s).slice(0, 5);
+    const probs = Object.fromEntries(NAMES.map(n => [n, 0])); let tot = 0;
+    for (const x of sims) { const w = Math.exp((x.s - 1) * 12); probs[x.label] += w; tot += w; }
+    for (const n of NAMES) probs[n] = tot ? probs[n] / tot : 0; return { probs, best: sims[0] };
+  };
+  const chips = () => { const cnt = {}; for (const t of teach) cnt[t.label] = (cnt[t.label] || 0) + 1;
+    $('teachChips').innerHTML = teach.length ? NAMES.map(n => `<span class="${cnt[n] ? '' : 'z'}" title="${KO[n]}">${n} ${cnt[n] || 0}</span>`).join('') : '<span class="z">가르친 사진 없음</span>'; };
+  const teachFrom = async (items, note, viaCam) => { // items: [{label, cv|img}] · viaCam = 모니터에 띄워 시뮬레이션 카메라로 찍은 그림으로 가르침
+    await loadNet(); let k = 0;
+    for (const it of items) {
+      if (viaCam) { paintShow(it.cv); const rr = simCamera(); drawRoi(rr); toInput(rr); }
+      else { const c = AI_IN.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, 224, 224); const src = it.cv || it.img, s = Math.min(224 / src.width, 224 / src.height);
+      c.drawImage(src, (224 - src.width * s) / 2, (224 - src.height * s) / 2, src.width * s, src.height * s); }
+      const emb = tf.tidy(() => net.infer(AI_IN, true)); teach.push({ label: it.label, v: norm(Array.from(await emb.data())) }); emb.dispose();
+      if (++k % 10 === 0) { $('aiStatus').textContent = `가르치는 중… ${k}/${items.length}`; await new Promise(r => setTimeout(r)); }
+    }
+    $('aiStatus').textContent = `가르치기 끝: ${note} ${items.length}장 (모두 ${teach.length}장)`; chips();
+  };
+  $('teachBuiltin').onclick = async () => { // Level 1 기본 그림 25종 × 8 (슬라이드쇼와 다른 씨앗)
+    const r = rngOf(99991), items = []; for (const n of NAMES) for (let k = 0; k < 8; k++) items.push({ label: n, cv: makeL1(n, r) });
+    const viaCam = $('camSrc').value === 'sim';
+    try { await teachFrom(items, viaCam ? '기본 그림(카메라로 찍음)' : '기본 그림', viaCam); } catch (e) {} paintShow(null, 'Vcc 2027 · Deep Safari');
+  };
+  $('teachLoad').onclick = () => $('teachFiles').click();
+  $('teachFiles').onchange = async e => { const got = await loadImages(e.target.files);
+    if (!got.length) return alert('파일·폴더 이름에서 동물 이름(예: zebra_01.jpg, Lion/a.png, 얼룩말 3.jpg)을 찾지 못했습니다.');
+    try { await teachFrom(got, '내 사진'); } catch (e2) {} e.target.value = ''; };
+  $('teachClear').onclick = () => { teach = []; chips(); };
+
+  // 시뮬레이션 카메라: 방 + 모니터 테두리 + 거리·각도·흐림·잡음 / 실제 웹캠 + ROI
+  const camView = $('camView'), cc = camView.getContext('2d', { willReadFrequently: true }), CW = camView.width, CH = camView.height;
+  let video = null, stream = null, roi = null;
+  const simCamera = () => {
+    const d = +$('cDist').value / 100, ang = +$('cAng').value * Math.PI / 180, blur = +$('cBlur').value, noise = +$('cNoise').value;
+    const cw = CW, ch = CH; cc.save();
+    const g = cc.createLinearGradient(0, 0, 0, ch); g.addColorStop(0, '#5d6470'); g.addColorStop(0.7, '#3d424a'); g.addColorStop(0.71, '#7b6a55'); g.addColorStop(1, '#5d4f3f');
+    cc.fillStyle = g; cc.fillRect(0, 0, cw, ch);
+    const mw = Math.min(CW - 20, 0.42 / d * (CW - 20)), mh = mw * 9 / 16, sx = Math.cos(ang); // 모니터 폭 (0.4m 에서 화면 가득)
+    cc.translate(cw / 2, ch * 0.45); cc.transform(sx, Math.sin(ang) * 0.18, 0, 1, 0, 0);
+    cc.fillStyle = '#111'; cc.fillRect(-mw / 2 - 6, -mh / 2 - 6, mw + 12, mh + 12);
+    cc.filter = `blur(${blur * 1.2}px)`; cc.drawImage(show, -mw / 2, -mh / 2, mw, mh); cc.filter = 'none';
+    cc.restore();
+    if (noise > 0) { const im = cc.getImageData(0, 0, cw, ch), a = im.data; for (let k = 0; k < a.length; k += 4) { const n = (Math.random() - 0.5) * noise * 2; a[k] += n; a[k + 1] += n; a[k + 2] += n; } cc.putImageData(im, 0, 0); }
+    const bw = mw * sx; return $('cRoi').checked ? { x: cw / 2 - bw / 2, y: ch * 0.45 - mh / 2 - Math.abs(Math.sin(ang)) * mw * 0.09, w: bw, h: mh + Math.abs(Math.sin(ang)) * mw * 0.18 } : null;
+  };
+  const webCamera = () => {
+    if (!video || video.readyState < 2) { cc.fillStyle = '#222'; cc.fillRect(0, 0, CW, CH); cc.fillStyle = '#aaa'; cc.font = '24px sans-serif'; cc.fillText('웹캠 준비 중…', 240, 240); return null; }
+    cc.drawImage(video, 0, 0, CW, CH); return roi;
+  };
+  const drawRoi = r => { if (!r) return; cc.save(); cc.strokeStyle = '#4ea1ff'; cc.lineWidth = 3; cc.setLineDash([6, 4]); cc.strokeRect(r.x, r.y, r.w, r.h); cc.restore(); };
+  const startWebcam = async () => {
+    try {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      const dev = $('camDev').value; stream = await navigator.mediaDevices.getUserMedia({ video: dev ? { deviceId: { exact: dev }, width: 1280, height: 720 } : { width: 1280, height: 720 } });
+      video = video || Object.assign(document.createElement('video'), { muted: true, playsInline: true }); video.srcObject = stream; await video.play();
+      const devs = (await navigator.mediaDevices.enumerateDevices()).filter(x => x.kind === 'videoinput');
+      $('camDev').innerHTML = devs.map((x, i) => `<option value="${x.deviceId}">${x.label || '카메라 ' + (i + 1)}</option>`).join(''); $('camDev').hidden = devs.length < 2;
+      const id = stream.getVideoTracks()[0].getSettings().deviceId; if (id) $('camDev').value = id;
+    } catch (e) { $('aiStatus').innerHTML = `<span class="bad">웹캠을 열 수 없습니다: ${e.message}</span>`; }
+  };
+  $('camSrc').onchange = () => { const w = $('camSrc').value === 'webcam'; $('simCamOpts').style.display = w ? 'none' : ''; if (w) startWebcam(); else if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } };
+  $('camDev').onchange = startWebcam;
+  { let a = null; camView.onmousedown = e => { if ($('camSrc').value !== 'webcam') return; const b = camView.getBoundingClientRect(); a = { x: (e.clientX - b.left) * CW / b.width, y: (e.clientY - b.top) * CH / b.height }; };
+    camView.onmousemove = e => { if (!a) return; const b = camView.getBoundingClientRect(), x = (e.clientX - b.left) * CW / b.width, y = (e.clientY - b.top) * CH / b.height;
+      roi = { x: Math.min(a.x, x), y: Math.min(a.y, y), w: Math.abs(x - a.x), h: Math.abs(y - a.y) }; };
+    window.addEventListener('mouseup', () => { if (a && roi && (roi.w < 24 || roi.h < 24)) roi = null; a = null; }); }
+
+  // 카메라 그림(ROI) → 224×224 AI 입력 · 두뇌 판단
+  const toInput = r => { const c = AI_IN.getContext('2d'), src = r || { x: 0, y: 0, w: CW, h: CH };
+    c.fillStyle = '#000'; c.fillRect(0, 0, 224, 224); const s = Math.min(224 / src.w, 224 / src.h);
+    c.drawImage(camView, src.x, src.y, src.w, src.h, (224 - src.w * s) / 2, (224 - src.h * s) / 2, src.w * s, src.h * s); };
+  const decide = async () => {
+    const L = await look(AI_IN), mode = $('brain').value, useK = mode === 'knn' || (mode === 'auto' && teach.length);
+    const k = useK && teach.length ? knn(L.embed) : null, probs = k ? k.probs : L.probs;
+    return { L, k, ranked: NAMES.map(n => [n, probs[n]]).sort((a, b) => b[1] - a[1]) };
+  };
+  // 📊 빠른 정확도 점검: 시계 없이 그림 N장을 시뮬레이션 카메라로 보고 맞힌 비율 (같은 설정·두뇌)
+  const quickCheck = async (n = 50) => {
+    await loadNet(); const level = lv(), r = rngOf((+$('seed').value || 1) * 104729 + level), conf = {}; let right = 0, outs = 0, ms = 0;
+    const th2 = +$('aTh').value / 100;
+    for (let k = 0; k < n; k++) {
+      const label = NAMES[k % NAMES.length], cv = level === 2 ? makeL2(label, r) : makeL1(label, r);
+      paintShow(cv); const roiR = simCamera(); drawRoi(roiR); toInput(roiR);
+      const t0 = performance.now(), { ranked } = await decide(); ms += performance.now() - t0;
+      const [best, p] = ranked[0]; if (best === label) right++; else (conf[label + ' → ' + best] = (conf[label + ' → ' + best] || 0) + 1);
+      if (p >= th2) outs++;
+      if (k % 5 === 4) { $('aiStatus').textContent = `점검 중… ${k + 1}/${n}`; await new Promise(res => setTimeout(res)); }
+    }
+    const top = Object.entries(conf).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => `${k} ×${v}`).join(', ');
+    const res = { n, acc: right / n, confident: outs / n, ms: ms / n, top };
+    $('aiStatus').innerHTML = `📊 Level ${level} 그림 ${n}장: 맞힘 <b>${Math.round(res.acc * 100)}%</b> · 확신도 넘김 ${Math.round(res.confident * 100)}% · 한 장 ${res.ms.toFixed(0)}ms` + (top ? `<br>자주 틀림: ${top}` : '');
+    paintShow(null, `점검 ${Math.round(res.acc * 100)}%`); return res;
+  };
+
+  const aiTeam = () => {
+    let busy = false, last = 0, stable = { label: null, n: 0 }, lastOut = null, prevThumb = null, ema = 2;
+    const TW = 48, TH2 = 48, TN = TW * TH2, TH = document.createElement('canvas'); TH.width = TW; TH.height = TH2;
+    const thumb = src => { const c = TH.getContext('2d', { willReadFrequently: true }); c.drawImage(src, 0, 0, TW, TH2); const d = c.getImageData(0, 0, TW, TH2).data, g = new Float32Array(TN); for (let k = 0; k < TN; k++) g[k] = (d[k * 4] + d[k * 4 + 1] + d[k * 4 + 2]) / 3; return g; };
+    return {
+      async tick(t) {
+        const r = $('camSrc').value === 'webcam' ? webCamera() : simCamera(); drawRoi(r);
+        if (busy || !net || performance.now() - last < 160) return; busy = true; last = performance.now();
+        try {
+          toInput(r);
+          // 화면 바뀜 감지: 작은 회색 그림(48×48)에서 많이 바뀐 칸의 비율을 평소 흔들림(잡음)과 비교 → 새 장면이면 다시 답할 수 있음
+          const th = thumb(AI_IN); let diff = 0; if (prevThumb) { for (let k = 0; k < TN; k++) if (Math.abs(th[k] - prevThumb[k]) > 24) diff++; diff = diff / TN * 100; } prevThumb = th;
+          const changed = diff > Math.max(4, ema * 3); if (!changed) ema = ema * 0.9 + diff * 0.1;
+          if (changed) { lastOut = null; stable = { label: null, n: 0 }; }
+          const { L, k, ranked } = await decide(), [best, p] = ranked[0];
+          const th2 = +$('aTh').value / 100, need = +$('aN').value;
+          if (p >= th2) stable = stable.label === best ? { label: best, n: stable.n + 1 } : { label: best, n: 1 }; else stable = { label: null, n: 0 };
+          dbg(`두뇌: ${k ? '내가 가르친 것 (kNN)' : 'ImageNet → 25종'}${changed ? '   [화면 바뀜]' : ''}\n` + ranked.slice(0, 5).map(([n, v]) => `${n.padEnd(13)} ${(v * 100).toFixed(1).padStart(5)}%  ${'█'.repeat(Math.round(v * 20))}`).join('\n')
+            + `\n연속 ${stable.n}/${need}  ·  화면 바뀜 ${diff.toFixed(1)}% (기준 ${Math.max(4, ema * 3).toFixed(1)}%)  ·  동물다움 ${(L.animalness * 100).toFixed(0)}%${k ? '  ·  가장 비슷한 사진 ' + k.best.label + ' ' + k.best.s.toFixed(2) : ''}`);
+          // 장면마다 한 번: 화면 바뀜 뒤 첫 확정 답만. 바뀜을 놓쳐도 다른 답이 오래(연속 ×2) 확실하면 새 장면으로 봄
+          const lock = $('aLock').checked, fresh = lastOut === null || (stable.label !== lastOut && stable.n >= need * 2);
+          if (run && stable.n >= need && stable.label && (lock ? fresh : stable.label !== lastOut)) { lastOut = stable.label; output(stable.label, $('aSpeak').checked); }
+        } finally { busy = false; }
+      },
+    };
+  };
+
+  // ───────── 실행 ─────────
+  const dbgEl = $('debug'); const dbg = s => { dbgEl.textContent = s; };
+  const status = s => { $('status').textContent = s; };
+  const fmt = t => t.toFixed(2) + 's';
+  let raf = 0, team = null;
+  const teamMode = () => document.querySelector('input[name=team]:checked').value;
+  const loop = async () => {
+    if (!run) return;
+    const t = now(), i = Math.min(cur.slides.length - 1, Math.floor(t / cur.D));
+    if (t >= cur.slides.length * cur.D) return finish();
+    if (i !== run.shown) { run.shown = i; paintShow(cur.slides[i].cv); }
+    $('prog').style.width = ((t % cur.D) / cur.D * 100) + '%';
+    $('slideNo').textContent = `Level ${cur.level} · ${i + 1} / ${cur.slides.length}`; $('clock').textContent = t.toFixed(1) + ' s';
+    if (team) await team.tick(t, i);
+    raf = requestAnimationFrame(loop);
+  };
+  const start = async () => {
+    if (teamMode() === 'ai') { try { await loadNet(); } catch (e) { return; } }
+    cur = buildShow(); team = teamMode() === 'ai' ? aiTeam() : virtualTeam();
+    $('answer').textContent = '—'; $('spoken').textContent = '🔊 —'; $('sheet').querySelector('tbody').innerHTML = ''; $('total').textContent = ''; $('log').textContent = '';
+    $('startBtn').disabled = true; $('stopBtn').disabled = false; $('csvBtn').disabled = true;
+    for (let k = 3; k > 0; k--) { paintShow(null, `${k}`); status(`곧 시작합니다… ${k}`); await new Promise(r => setTimeout(r, 450)); }
+    run = { t0: performance.now(), speed: +$('speed').value, events: [], shown: -1 };
+    status(`진행 중 — Level ${cur.level}, ${cur.slides.length}장 × ${cur.D}초, 씨앗 ${cur.seed}`);
+    raf = requestAnimationFrame(loop);
+  };
+  const finish = (stopped) => {
+    cancelAnimationFrame(raf); if (!run) return;
+    const r = run; run = null; $('prog').style.width = '100%';
+    const n = stopped ? Math.min(cur.slides.length, Math.ceil(((performance.now() - r.t0) * r.speed / 1000) / cur.D)) : cur.slides.length;
+    const res = judge(cur.labels.slice(0, n), r.events, cur.D, cur.level);
+    res.events = r.events; res.seed = cur.seed; res.team = teamMode(); lastResult[cur.level] = res; window.__vcc.last = res;
+    renderResult(res, stopped); paintShow(null, stopped ? '멈춤' : `끝 · ${res.total} / ${res.max}`);
+    $('startBtn').disabled = false; $('stopBtn').disabled = true; $('csvBtn').disabled = false;
+    status(stopped ? '멈췄습니다 (보인 그림까지만 채점)' : '끝났습니다 — 아래 채점표를 보세요');
+  };
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const evStr = (evs, label) => evs.length ? evs.map(e => `<span class="${isCorrect(e.text, label) ? 'ok' : 'bad'}">${esc(e.text)}</span> <span class="hint">${fmt(e.t)}</span>`).join('<br>') : '<span class="hint">—</span>';
+  const renderResult = (res, stopped) => {
+    $('resTitle').textContent = `Level ${res.level} · ${res.rows.length}장 × ${res.D}초 · 씨앗 ${res.seed} · ${res.team === 'ai' ? 'AI 카메라' : '가상 팀'}${stopped ? ' · 중간에 멈춤' : ''}`;
+    $('sheet').querySelector('tbody').innerHTML = res.rows.map(r => {
+      const notes = [r.print.note && '출력: ' + r.print.note, r.speak.note && '음성: ' + r.speak.note].filter(Boolean).join('<br>');
+      return `<tr><td>${r.seq}</td><td><b>${r.label}</b> <span class="hint">${KO[r.label]}</span></td><td>${evStr(r.print.evs, r.label)}</td><td>${evStr(r.speak.evs, r.label)}</td>
+        <td class="pts ${r.pts === 2 * (res.level === 2 ? 2 : 1) ? 'ok' : r.pts ? 'warn' : 'bad'}">${r.pts}</td><td class="hint">${esc(notes).replace(/&lt;br&gt;/g, '<br>')}</td></tr>`;
+    }).join('');
+    $('total').textContent = `${res.total} / ${res.max}점`;
+    const l1 = lastResult[1], l2 = lastResult[2];
+    $('sum2').textContent = (l1 || l2) ? `합계(가장 최근 Level 1 + Level 2): ${(l1 ? l1.total : 0) + (l2 ? l2.total : 0)} / ${(l1 ? l1.max : 30) + (l2 ? l2.max : 60)}점 — 동점이면 Level 2 점수 먼저` : '';
+    $('log').textContent = res.events.map(e => `${fmt(e.t).padStart(8)}  ${e.ch === 'print' ? '출력' : '음성'}  ${e.text}   (그림 ${Math.floor(e.t / res.D) + 1})`).join('\n') || '출력 없음';
+  };
+  $('csvBtn').onclick = () => {
+    const res = window.__vcc.last; if (!res) return;
+    const q = s => `"${String(s).replace(/"/g, '""')}"`;
+    const lines = [['Vcc 2027: Deep Safari'], [`Level ${res.level}`, `Points for each level: ${res.level === 2 ? 2 : 1}`, `Max ${res.max}`, `Seed ${res.seed}`], [],
+      ['Seq No.', 'Correct Sign', 'Sign Displayed', 'Sign Spoken', 'Points', 'Notes'],
+      ...res.rows.map(r => [r.seq, r.label, r.print.evs.map(e => `${e.text} @${e.t.toFixed(2)}s`).join(' | '), r.speak.evs.map(e => `${e.text} @${e.t.toFixed(2)}s`).join(' | '), r.pts,
+        [r.print.note && 'print: ' + r.print.note, r.speak.note && 'speech: ' + r.speak.note].filter(Boolean).join(' / ')]), [], ['Total Points', '', '', '', res.total]];
+    const blob = new Blob(['﻿' + lines.map(l => l.map(q).join(',')).join('\r\n')], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `vcc2027_L${res.level}_seed${res.seed}.csv`; a.click();
+  };
+  $('startBtn').onclick = start;
+  $('checkBtn').onclick = async () => { if (run) return; $('checkBtn').disabled = true; try { await quickCheck(50); } catch (e) {} $('checkBtn').disabled = false; };
+  $('stopBtn').onclick = () => finish(true);
+  $('previewBtn').onclick = () => { const s = buildShow(); let k = 0; const step = () => { if (k >= s.slides.length || run) return; paintShow(s.slides[k].cv); $('slideNo').textContent = `미리 보기 ${k + 1} / ${s.slides.length} · ${s.labels[k]}`; k++; setTimeout(step, 700); }; step(); };
+
+  // ───────── 설정 화면 ─────────
+  const bindOut = (id, f) => { const u = () => { $(id + 'O').textContent = f(+$(id).value); }; $(id).addEventListener('input', u); u(); };
+  bindOut('bright', v => v + '%'); bindOut('contrast', v => v + '%'); bindOut('occl', v => v ? v + '%' : '없음');
+  bindOut('vAcc', v => v + '%'); bindOut('vLat', v => (v / 10).toFixed(1) + ' s'); bindOut('vFlk', v => v + '%');
+  bindOut('cDist', v => (v / 100).toFixed(2) + ' m'); bindOut('cAng', v => v + '°'); bindOut('aTh', v => v + '%'); bindOut('aN', v => v + '번');
+  for (const id of ['bright', 'contrast']) $(id).addEventListener('input', () => { if (run && cur) paintShow(cur.slides[Math.max(0, run.shown)].cv); });
+  document.querySelectorAll('input[name=team]').forEach(e => e.onchange = () => { $('mode-virtual').classList.toggle('on', teamMode() === 'virtual'); $('mode-ai').classList.toggle('on', teamMode() === 'ai');
+    $('camNote').textContent = teamMode() === 'ai' ? '' : '(🤖 가상 팀은 카메라를 쓰지 않습니다)';
+    if (teamMode() === 'ai') loadNet().catch(() => {}); });
+  $('loadImgs').onclick = () => $('imgFiles').click();
+  $('imgFiles').onchange = async e => {
+    myImgs = await loadImages(e.target.files); const kinds = new Set(myImgs.map(x => x.label));
+    $('imgSrc').options[1].disabled = !myImgs.length; if (myImgs.length) $('imgSrc').value = 'mine';
+    $('imgCount').textContent = myImgs.length ? `내 그림 ${myImgs.length}장 · ${kinds.size}종 (${[...kinds].join(', ')})` : '동물 이름이 들어간 파일을 찾지 못했습니다 (예: zebra_01.jpg, Lion/a.png, 얼룩말 3.jpg)';
+    e.target.value = '';
+  };
+  // 쉬는 동안: 시뮬레이션 카메라 화면도 계속 보여 줌 (AI 모드)
+  setInterval(() => { if (!run && teamMode() === 'ai') { const r = $('camSrc').value === 'webcam' ? webCamera() : simCamera(); drawRoi(r); } }, 200);
+  paintShow(null, 'Vcc 2027 · Deep Safari'); chips();
+
+  window.__vcc = { judge, isCorrect, labelOfPath, buildShow, NAMES, makeL1, makeL2, last: null, get run() { return run; }, finish, quickCheck, loadNet, get teachN() { return teach.length; } };
+})();
+</script>
+</body>
+</html>

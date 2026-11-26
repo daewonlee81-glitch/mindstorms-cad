@@ -853,6 +853,53 @@ DEMO_JS = r"""([task, col]) => new Promise(res => {
 })"""
 
 
+@test("vcc-deep-safari")
+async def t_vcc(env):
+    """vcc.html — Robofest Vcc 2027 채점 규칙(틀린 답 섞이면 0 · 여러 번이면 50% · 창은 처음 나타난 시각) + 가상 팀 한 판."""
+    ctx = await env.browser.new_context(viewport={"width": 1500, "height": 950}, locale="ko-KR")
+    pg = await ctx.new_page()
+    pg.errors = []
+    pg.on("pageerror", lambda e: pg.errors.append(str(e)))
+    try:
+        await pg.goto(env.base + "/vcc.html")
+        r = await pg.evaluate("""(() => {
+          const V = window.__vcc;
+          const cases = [['Tiger','Tiger',true],['Tiger - Animal','Tiger',true],['Polar Bear','Bear',false],['Giant Panda','Panda',false],
+            ['Sea Turtle','Turtle',false],['Alligator','Crocodile',false],['Armadillos','Armadillo',true],['Cat','Tiger',false]];
+          const bad = cases.filter(([t, l, e]) => V.isCorrect(t, l) !== e).map(c => c.join('/'));
+          const ev = [{ch:'print',text:'Tiger',t:1},{ch:'speak',text:'Tiger',t:1},
+            {ch:'print',text:'Horse',t:7},{ch:'print',text:'Zebra',t:7.5},{ch:'speak',text:'Zebra',t:7.5},
+            {ch:'print',text:'Lion',t:13},{ch:'print',text:'Lion',t:15},{ch:'speak',text:'Lion',t:13},{ch:'speak',text:'Lion',t:18.5},
+            {ch:'print',text:'Bear',t:19}];
+          const j1 = V.judge(['Tiger','Zebra','Lion','Bear'], ev, 6, 1), j2 = V.judge(['Tiger','Zebra','Lion','Bear'], ev, 6, 2);
+          return { bad, pts: j1.rows.map(x => [x.print.pts, x.speak.pts]), t1: j1.total, m1: j1.max, t2: j2.total, m2: j2.max,
+            paths: ['zebra_01.jpg','Lion/a.png','얼룩말 3.jpg','rhinos/a.png','cat.jpg'].map(V.labelOfPath) };
+        })()""")
+        check(not r["bad"], f"정답 판정 틀림: {r['bad']}")
+        check(r["pts"] == [[1, 1], [0, 1], [0.5, 1], [1, 0]], f"창별 점수: {r['pts']}")
+        check((r["t1"], r["m1"], r["t2"], r["m2"]) == (5.5, 8, 11, 16), f"합계: {r}")
+        check(r["paths"] == ["Zebra", "Lion", "Zebra", "Rhinoceros", None], f"파일 이름 → 동물: {r['paths']}")
+        # 가상 팀 한 판 (정확도 100%, 흔들림 0, 한 번 출력, 5장 × 3초, 4배) → 만점
+        await pg.evaluate("""(() => { const s = (id, v) => { const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('input')); };
+          s('vAcc', 100); s('vFlk', 0); s('vLat', 8); s('nSlides', 5); s('dur', '3'); s('speed', '4'); document.getElementById('vOut').value = 'once'; })()""")
+        await pg.click("#startBtn")
+        await pg.wait_for_function("window.__vcc.last && !window.__vcc.run", timeout=60000)
+        res = await pg.evaluate("({ t: window.__vcc.last.total, m: window.__vcc.last.max, rows: document.querySelectorAll('#sheet tbody tr').length })")
+        check(res["t"] == res["m"] == 10 and res["rows"] == 5, f"가상 팀 만점 아님: {res}")
+        # 2초마다 반복 출력 → 맞는 답 여러 번(50%)이나 다음 창으로 넘어간 출력(0) 때문에 감점
+        await pg.evaluate("""(() => { const s = (id, v) => { const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('input')); };
+          s('nSlides', 5); s('dur', '6'); document.getElementById('vOut').value = 'repeat'; })()""")
+        await pg.click("#startBtn")
+        await pg.wait_for_function("window.__vcc.last && window.__vcc.last.D === 6 && !window.__vcc.run", timeout=60000)
+        rep = await pg.evaluate("window.__vcc.last.total")
+        check(rep < 10, f"반복 출력인데 감점 없음: {rep}")
+        check(not pg.errors, f"페이지 오류: {pg.errors[:3]}")
+        return f"정답 판정 {len(r['paths'])}·창별 점수 맞음, 가상 팀 10/10, 반복 출력 {rep}/10"
+    finally:
+        with contextlib.suppress(Exception):
+            await ctx.close()
+
+
 @test("demo-train-drive (3인칭)", full=True)
 async def t_full(env):
     """스크립트로 빨강·파랑 시범 2번씩 → 40번 학습 → 같은 출발점에서 지시만 바꿔 맞는 칸으로 가는지."""
